@@ -32,6 +32,19 @@ class YamlGeneratorTests(unittest.TestCase):
             self.assertIn("action: input_number.set_value", text)
             self.assertEqual(path.read_text(encoding="utf-8"), text)
 
+    def test_generates_image_component(self) -> None:
+        from PIL import Image
+        with TemporaryDirectory() as directory:
+            image_path = Path(directory) / "sample.png"
+            Image.new("RGBA", (64, 48), (47, 125, 246, 180)).save(image_path)
+            project = self.make_project()
+            project.widgets.append(WidgetModel(id="logo", kind="image", text="标志", width=64, height=48, asset_path=str(image_path)))
+            text = YamlGenerator().generate(project, Path(directory) / "panel.yaml")
+            self.assertIn("image:\n  - platform: file", text)
+            self.assertIn("id: logo_asset", text)
+            self.assertIn("resize: 64x48", text)
+            self.assertIn("src: logo_asset", text)
+
     def test_rejects_invalid_entity(self) -> None:
         project = self.make_project()
         project.widgets[0].binding = "not an entity"

@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>米家中枢屏幕工作台</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark">M</span>
+      <div><strong>米家中枢屏幕工作台</strong><small>VIEWE ESP32-S3 · 800 × 480</small></div>
+    </div>
+    <div class="top-actions">
+      <span id="saveState" class="status-dot">已保存</span>
+      <button id="generateBtn" class="button">生成配置</button>
+      <button id="validateBtn" class="button">校验</button>
+      <button id="compileBtn" class="button primary">编译固件</button>
+      <select id="portSelect" aria-label="烧录串口"><option value="">选择串口</option></select>
+      <button id="flashBtn" class="button danger">烧录</button>
+    </div>
+  </header>
+
+  <main class="workspace">
+    <aside class="palette panel">
+      <div class="panel-title">组件</div>
+      <button class="tool" data-kind="label"><span class="tool-icon">T</span><span>文本</span></button>
+      <button class="tool" data-kind="button"><span class="tool-icon">B</span><span>触摸按钮</span></button>
+      <button class="tool" id="imageTool"><span class="tool-icon">I</span><span>图片</span></button>
+      <button class="tool disabled" id="videoTool" title="ESPHome没有适用于此板卡的通用视频解码组件"><span class="tool-icon">V</span><span>视频</span><b>不支持</b></button>
+      <input id="imageInput" type="file" accept="image/png,image/jpeg,image/webp,image/bmp" hidden>
+      <div class="palette-separator"></div>
+      <div class="panel-title">项目</div>
+      <button class="tool compact" id="projectSettings"><span class="tool-icon">S</span><span>设备与网络</span></button>
+      <button class="tool compact" id="refreshPorts"><span class="tool-icon">R</span><span>刷新串口</span></button>
+    </aside>
+
+    <section class="stage">
+      <div class="stage-toolbar">
+        <div class="segmented" role="group" aria-label="画布缩放">
+          <button data-zoom="0.6">60%</button><button data-zoom="0.8">80%</button><button class="active" data-zoom="1">100%</button>
+        </div>
+        <span id="selectionInfo">未选择组件</span>
+        <button id="deleteBtn" class="icon-command" disabled>删除</button>
+      </div>
+      <div class="canvas-scroll">
+        <div class="screen-shell" id="screenShell">
+          <div class="screen-meta"><span>0, 0</span><span>800 × 480 RGB</span><span>800, 480</span></div>
+          <div id="screen" class="screen" tabindex="0"></div>
+        </div>
+      </div>
+    </section>
+
+    <aside class="inspector panel">
+      <div class="panel-title-row"><div class="panel-title" id="inspectorTitle">项目设置</div><span id="kindBadge" class="badge">PROJECT</span></div>
+      <div id="projectForm" class="form-scroll">
+        <section class="form-section"><h2>设备</h2>
+          <label>项目名称<input data-project="name"></label>
+          <label>设备名称<input data-project="device_name"></label>
+        </section>
+        <section class="form-section"><h2>网络</h2>
+          <label>WiFi名称<input data-project="wifi_ssid"></label>
+          <label>WiFi密码<input type="password" data-project="wifi_password"></label>
+          <label>Home Assistant地址<input data-project="ha_address" placeholder="http://homeassistant.local:8123"></label>
+        </section>
+        <section class="form-section"><h2>安全</h2>
+          <label>API加密密钥<input type="password" data-project="api_key"></label>
+          <label>OTA密码<input type="password" data-project="ota_password"></label>
+        </section>
+        <section class="form-section"><h2>米家变量</h2>
+          <label>在家人数1<input data-project="people_entity_1"></label>
+          <label>在家人数2<input data-project="people_entity_2"></label>
+        </section>
+      </div>
+
+      <div id="widgetForm" class="form-scroll hidden">
+        <section class="form-section" id="contentSection"><h2>内容</h2>
+          <label id="textRow">文字<input data-widget="text"></label>
+          <label id="bindingRow">绑定实体<input data-widget="binding" placeholder="sensor.people_home_1"></label>
+          <div id="assetRow" class="asset-preview hidden"><img id="assetPreview" alt="组件图片"><button id="replaceImage" class="button">替换图片</button></div>
+        </section>
+        <section class="form-section"><h2>布局</h2>
+          <div class="field-grid">
+            <label>X<input type="number" min="0" max="800" data-widget-number="x"></label>
+            <label>Y<input type="number" min="0" max="480" data-widget-number="y"></label>
+            <label>宽度<input type="number" min="20" max="800" data-widget-number="width"></label>
+            <label>高度<input type="number" min="20" max="480" data-widget-number="height"></label>
+          </div>
+        </section>
+        <section class="form-section" id="styleSection"><h2>样式</h2>
+          <label>字号<input type="number" min="8" max="96" data-widget-number="font_size"></label>
+          <div class="field-grid">
+            <label>文字颜色<input type="color" data-widget="text_color"></label>
+            <label>背景颜色<input type="color" data-widget="background_color"></label>
+          </div>
+          <label>动画<select data-widget="animation"><option>无</option><option>渐显</option><option>滚动</option></select></label>
+        </section>
+        <section class="form-section" id="actionSection"><h2>触摸操作</h2>
+          <label>HA操作<input data-widget="action" placeholder="input_number.set_value"></label>
+          <label>操作实体<input data-widget="action_entity" placeholder="input_number.people_home_1"></label>
+          <label>操作值<input type="number" data-widget-number="action_value"></label>
+        </section>
+      </div>
+    </aside>
+  </main>
+
+  <section class="console" id="console">
+    <div class="console-head"><strong>构建输出</strong><span id="taskState">空闲</span><progress id="taskProgress" max="100" value="0"></progress><button id="toggleConsole">收起</button></div>
+    <pre id="logOutput">等待任务...</pre>
+  </section>
+
+  <div id="toast" class="toast" role="status"></div>
+  <script src="/app.js"></script>
+</body>
+</html>

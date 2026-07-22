@@ -1,19 +1,19 @@
-"""MiHome Display Studio entry point."""
+"""MiHome Display Studio web entry point."""
 from __future__ import annotations
 
-import sys
+import argparse
 from pathlib import Path
-from PyQt6.QtWidgets import QApplication
 
-from app.main_window import MainWindow
+from app.web_server import run_server
 
 
 def main() -> int:
-    app = QApplication(sys.argv)
-    app.setApplicationName("米家中枢屏幕工作台")
-    window = MainWindow(Path.cwd())
-    window.show()
-    return app.exec()
+    parser = argparse.ArgumentParser(description="米家中枢屏幕工作台")
+    parser.add_argument("--port", type=int, default=8765, help="本地Web端口")
+    parser.add_argument("--no-browser", action="store_true", help="不自动打开浏览器")
+    args = parser.parse_args()
+    run_server(Path.cwd(), args.port, not args.no_browser)
+    return 0
 
 
 if __name__ == "__main__":

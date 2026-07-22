@@ -50,11 +50,11 @@ class YamlGenerator:
 
     def _render(self, p: ProjectModel, font_file: str) -> str:
         glyphs = "".join(sorted(set("0123456789.-+ 人在家" + "".join(w.text for w in p.widgets))))
-        font_sizes = sorted({w.font_size for w in p.widgets} or {28})
+        font_sizes = sorted({w.font_size for w in p.widgets if w.kind != "image"} or {28})
         default_font_id = f"ui_font_{font_sizes[0]}"
         entity_widgets: dict[str, list[WidgetModel]] = {}
         for w in p.widgets:
-            if w.binding:
+            if w.kind != "image" and w.binding:
                 entity_widgets.setdefault(w.binding, []).append(w)
         for entity in (p.people_entity_1, p.people_entity_2):
             if entity:
@@ -99,6 +99,15 @@ class YamlGenerator:
         for size in font_sizes:
             lines += [f"  - file: {q(font_file)}", f"    id: ui_font_{size}", f"    size: {size}", "    bpp: 4", f"    glyphs: {q(glyphs)}"]
         lines.append("")
+        image_widgets = [widget for widget in p.widgets if widget.kind == "image"]
+        if image_widgets:
+            lines.append("image:")
+            for widget in image_widgets:
+                lines += ["  - platform: file", f"    file: {q(Path(widget.asset_path).as_posix())}",
+                          f"    id: {widget.id}_asset", "    type: RGB565", f"    resize: {widget.width}x{widget.height}"]
+                if Path(widget.asset_path).suffix.lower() in {".png", ".webp"}:
+                    lines.append("    transparency: alpha_channel")
+            lines.append("")
         if entity_widgets:
             lines.append("sensor:")
             for index, (entity, widgets) in enumerate(entity_widgets.items(), 1):
@@ -129,6 +138,9 @@ class YamlGenerator:
     def _widget_lines(self, w: WidgetModel) -> list[str]:
         common = [f"            id: {w.id}_root", f"            x: {w.x}", f"            y: {w.y}",
                   f"            width: {w.width}", f"            height: {w.height}", "            radius: 4", "            pad_all: 0"]
+        if w.kind == "image":
+            return ["        - image:", f"            id: {w.id}_root", f"            x: {w.x}", f"            y: {w.y}",
+                    f"            width: {w.width}", f"            height: {w.height}", f"            src: {w.id}_asset"]
         if w.kind == "button":
             result = ["        - button:", *common, f"            bg_color: {color(w.background_color)}", "            widgets:",
                       "              - label:", f"                  id: {w.id}_label", "                  align: CENTER", f"                  text: {q(w.text)}",

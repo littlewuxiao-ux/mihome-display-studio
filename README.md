@@ -10,12 +10,18 @@
 
 ## 启动
 
-```powershell README.md
+```powershell
 python -m pip install -r requirements.txt
 python main.py
 ```
 
-工具调用当前 Python 环境中的 ESPHome，不包含独立编译内核。生成结果和项目数据位于 `build/`。
+工具调用当前 Python 环境中的 ESPHome，不包含独立编译内核。启动后会自动打开本地浏览器工作台，默认地址为 <http://127.0.0.1:8765>；生成结果和项目数据位于 `build/`。
+
+## 媒体支持
+
+- 静态图片：支持PNG、JPEG、WebP和BMP，单文件最大8MB。图片会按画布尺寸转换为RGB565并编译进固件，PNG/WebP可保留透明通道。
+- 动图：ESPHome支持GIF帧动画，但大尺寸或高帧率内容会快速占满16MB Flash并增加PSRAM压力，本版本暂未开放。
+- 视频：ESPHome/LVGL没有适用于该板卡的通用MP4/H.264视频解码链路，本版本不支持视频插入。
 
 ## Home Assistant准备
 
@@ -28,16 +34,27 @@ ESPHome 设备通过原生 API 与 HA 通信，并不直接连接 `ha_xiaomi_hom
 
 ## 模块
 
-- `app/canvas.py`：800x480 拖拽画布
+- `web/index.html`：浏览器工作台结构
+- `web/styles.css`：响应式工作台、屏幕边框和属性面板样式
+- `web/app.js`：画布拖拽、图片上传、项目编辑和任务日志交互
+- `app/web_server.py`：本地HTTP API、项目保存、串口和ESPHome任务管理
 - `app/models.py`：项目和组件数据模型
-- `app/yaml_generator.py`：板卡、LVGL、字体和 HA 实体 YAML 生成
-- `app/processes.py`：后台校验、编译、上传和中文错误提示
-- `app/serial_tools.py`：Windows 串口扫描
-- `app/main_window.py`：中文桌面界面和工作流编排
+- `app/yaml_generator.py`：板卡、LVGL、字体、图片和HA实体YAML生成
+
 
 ## 更新记录
 
-### 2026-07-22
+### 2026-07-22（Web工作台）
+
+- 主界面由PyQt6桌面窗口切换为本地浏览器工作台，启动命令保持`python main.py`。
+- 加入带物理外框、坐标标记和越界裁切的800x480屏幕画布，并支持60%、80%和100%缩放。
+- 右侧属性栏扩展至360-410px并支持独立滚动，完整显示设备、网络、布局、样式和触摸操作字段。
+- 加入PNG、JPEG、WebP和BMP上传、预览、拖拽、缩放、替换及ESPHome/LVGL静态图片YAML生成。
+- 集成浏览器内项目自动保存、串口刷新、配置生成、校验、编译、烧录进度和实时日志。
+- 明确标记常规视频不受支持，避免生成板卡无法解码的固件配置。
+- 通过桌面和紧凑视口浏览器截图检查、前端交互检查、3项单元测试及真实图片配置`esphome config`校验。
+
+### 2026-07-22（初始版本）
 
 - 建立PyQt6中文桌面应用和800x480可视化拖拽画布。
 - 支持文本、触摸按钮、坐标、尺寸、字号、颜色和滚动/渐显动画配置。

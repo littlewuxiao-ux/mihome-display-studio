@@ -26,6 +26,7 @@ class WidgetModel:
     action_entity: str = ""
     action_value: float = 1.0
     animation: str = "无"
+    asset_path: str = ""
 
     def clamp(self) -> None:
         self.width = max(20, min(self.width, 800))
@@ -61,6 +62,10 @@ class ProjectModel:
                 errors.append(f"{label}实体ID格式不正确")
         for widget in self.widgets:
             widget.clamp()
+            if widget.kind not in {"label", "button", "image"}:
+                errors.append(f"不支持的组件类型：{widget.kind}")
+            if widget.kind == "image" and (not widget.asset_path or not Path(widget.asset_path).is_file()):
+                errors.append(f"图片组件“{widget.text}”的文件不存在")
             if widget.binding and not ENTITY_RE.fullmatch(widget.binding):
                 errors.append(f"组件“{widget.text}”的绑定实体ID格式不正确")
             if widget.action_entity and not ENTITY_RE.fullmatch(widget.action_entity):
