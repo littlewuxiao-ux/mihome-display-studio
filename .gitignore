@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Generated ESPHome output and local project data
+build/
+.esphome/
+.pioenvs/
+.piolibdeps/
+
+# IDE and OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Local secrets
+secrets.yaml
+*.local.json
