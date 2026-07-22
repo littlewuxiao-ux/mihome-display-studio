@@ -4,7 +4,7 @@
 
 ## 仓库
 
-- 远程仓库：尚未绑定（绑定后在此处填写完整URL）
+- 远程仓库：<https://github.com/littlewuxiao-ux/mihome-display-studio>
 - 默认分支：`main`
 - 更新规则：每次功能更新后补充本README的“更新记录”，运行测试，通过后提交并推送到远程仓库。
 
@@ -46,6 +46,7 @@ ESPHome 设备通过原生 API 与 HA 通信，并不直接连接 `ha_xiaomi_hom
 - 加入ESPHome后台校验、编译、串口扫描、烧录进度及基础错误中文提示。
 - 安装并验证ESPHome `2026.7.1`，生成配置已通过真实`esphome config`校验。
 - 初始化Git版本管理，生成内容、缓存和本地敏感文件不进入仓库。
+- 创建并绑定GitHub公开仓库，建立更新后测试、提交和推送的维护流程。
 
 ## 硬件说明
 
