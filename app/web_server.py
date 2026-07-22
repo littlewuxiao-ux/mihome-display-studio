@@ -110,7 +110,7 @@ class StudioState:
             except (OSError, ValueError, TypeError):
                 pass
         return ProjectModel(
-            widgets=[WidgetModel(id="people_1", text="在家人数1", x=80, y=80, width=260, height=90, binding="sensor.people_home_1")]
+            widgets=[WidgetModel(id="people_1", kind="shape", shape_type="rectangle", text="在家人数1", x=80, y=80, width=260, height=90, binding="sensor.people_home_1")]
         )
 
     @property
@@ -118,9 +118,7 @@ class StudioState:
         return self.build_dir / f"{self.project.device_name}.yaml"
 
     def set_project(self, payload: dict[str, Any]) -> None:
-        payload = dict(payload)
-        payload["widgets"] = [WidgetModel(**item) for item in payload.get("widgets", [])]
-        self.project = ProjectModel(**payload)
+        self.project = ProjectModel.from_dict(payload)
         self.project.save(self.project_path)
 
     def generate(self) -> Path:

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 import json
+import math
 import shutil
 
 from .models import ProjectModel, WidgetModel
@@ -24,7 +25,8 @@ class YamlGenerator:
             raise ValueError("\n".join(errors))
         output_path.parent.mkdir(parents=True, exist_ok=True)
         font_file = self._prepare_font(project, output_path.parent)
-        text = self._render(project, font_file)
+        assets = self._prepare_images(project)
+        text = self._render(project, font_file, assets)
         output_path.write_text(text, encoding="utf-8")
         return text
 
@@ -48,14 +50,53 @@ class YamlGenerator:
             shutil.copy2(source, target)
         return target.as_posix()
 
-    def _render(self, p: ProjectModel, font_file: str) -> str:
+    def _prepare_images(self, project: ProjectModel) -> dict[str, tuple[str, bool]]:
+        from PIL import Image
+
+        image_dir = Path.home() / ".mijia-panel" / "images"
+        image_dir.mkdir(parents=True, exist_ok=True)
+        assets: dict[str, tuple[str, bool]] = {}
+        for widget in project.widgets:
+            sources = []
+            if widget.kind == "image" and widget.asset_path:
+                sources.append((f"{widget.id}_asset", widget.asset_path))
+            if widget.content_asset_path:
+                sources.append((f"{widget.id}_content_asset", widget.content_asset_path))
+            for asset_id, source_path in sources:
+                with Image.open(source_path) as source:
+                    source.load()
+                    has_alpha = source.mode in {"RGBA", "LA"} or "transparency" in source.info
+                    if widget.image_fit == "cover":
+                        scale = max(widget.width / source.width, widget.height / source.height)
+                        resized = source.resize((max(1, round(source.width * scale)), max(1, round(source.height * scale))))
+                        left = round((resized.width - widget.width) * widget.image_offset_x / 100)
+                        top = round((resized.height - widget.height) * widget.image_offset_y / 100)
+                        rendered = resized.crop((left, top, left + widget.width, top + widget.height))
+                    elif widget.image_fit == "contain":
+                        scale = min(widget.width / source.width, widget.height / source.height)
+                        resized = source.resize((max(1, round(source.width * scale)), max(1, round(source.height * scale))))
+                        rendered = Image.new("RGBA", (widget.width, widget.height), (0, 0, 0, 0))
+                        left = round((widget.width - resized.width) * widget.image_offset_x / 100)
+                        top = round((widget.height - resized.height) * widget.image_offset_y / 100)
+                        rendered.alpha_composite(resized.convert("RGBA"), (left, top))
+                        has_alpha = True
+                    else:
+                        rendered = source.resize((widget.width, widget.height))
+                    target = image_dir / f"{asset_id}_{widget.width}x{widget.height}.png"
+                    rendered.convert("RGBA" if has_alpha else "RGB").save(target)
+                    assets[asset_id] = (target.as_posix(), has_alpha)
+        return assets
+
+    def _render(self, p: ProjectModel, font_file: str, assets: dict[str, tuple[str, bool]]) -> str:
         glyphs = "".join(sorted(set("0123456789.-+ 人在家" + "".join(w.text for w in p.widgets))))
-        font_sizes = sorted({w.font_size for w in p.widgets if w.kind != "image"} or {28})
+        font_sizes = sorted({w.font_size for w in p.widgets} or {28})
         default_font_id = f"ui_font_{font_sizes[0]}"
         entity_widgets: dict[str, list[WidgetModel]] = {}
+        text_entity_widgets: dict[str, list[WidgetModel]] = {}
         for w in p.widgets:
-            if w.kind != "image" and w.binding:
-                entity_widgets.setdefault(w.binding, []).append(w)
+            if w.binding:
+                target = text_entity_widgets if w.binding_type == "state" and w.kind not in {"progress_circle", "progress_bar"} else entity_widgets
+                target.setdefault(w.binding, []).append(w)
         for entity in (p.people_entity_1, p.people_entity_2):
             if entity:
                 entity_widgets.setdefault(entity, [])
@@ -99,13 +140,11 @@ class YamlGenerator:
         for size in font_sizes:
             lines += [f"  - file: {q(font_file)}", f"    id: ui_font_{size}", f"    size: {size}", "    bpp: 4", f"    glyphs: {q(glyphs)}"]
         lines.append("")
-        image_widgets = [widget for widget in p.widgets if widget.kind == "image"]
-        if image_widgets:
+        if assets:
             lines.append("image:")
-            for widget in image_widgets:
-                lines += ["  - platform: file", f"    file: {q(Path(widget.asset_path).as_posix())}",
-                          f"    id: {widget.id}_asset", "    type: RGB565", f"    resize: {widget.width}x{widget.height}"]
-                if Path(widget.asset_path).suffix.lower() in {".png", ".webp"}:
+            for asset_id, (asset_path, has_alpha) in assets.items():
+                lines += ["  - platform: file", f"    file: {q(asset_path)}", f"    id: {asset_id}", "    type: RGB565"]
+                if has_alpha:
                     lines.append("    transparency: alpha_channel")
             lines.append("")
         if entity_widgets:
@@ -116,15 +155,36 @@ class YamlGenerator:
                 if widgets:
                     lines += ["    on_value:", "      then:"]
                     for w in widgets:
-                        lines += ["        - lvgl.label.update:", f"            id: {w.id}_label", "            text:",
-                                  "              format: \"%.0f\"", f"              args: [id({sid}).state]", "              if_nan: \"--\""]
+                        if w.kind in {"progress_circle", "progress_bar"}:
+                            update = "arc" if w.kind == "progress_circle" else "bar"
+                            lines += [f"        - lvgl.{update}.update:", f"            id: {w.id}_root", f"            value: !lambda return id({sid}).state;"]
+                            value_expression = f"(id({sid}).state - {w.progress_min}) * 100.0 / {w.progress_max - w.progress_min}" if w.show_value == "percent" else f"id({sid}).state"
+                            value_format = f"{w.text.replace('%', '%%')} %.0f%%" if w.show_value == "percent" else f"{w.text.replace('%', '%%')} %.0f"
+                            lines += ["        - lvgl.label.update:", f"            id: {w.id}_label", "            text:",
+                                      f"              format: {q(value_format)}", f"              args: [{value_expression}]", "              if_nan: \"--\""]
+                        else:
+                            lines += ["        - lvgl.label.update:", f"            id: {w.id}_label", "            text:",
+                                      "              format: \"%.0f\"", f"              args: [id({sid}).state]", "              if_nan: \"--\""]
+            lines.append("")
+        if text_entity_widgets:
+            lines.append("text_sensor:")
+            for index, (entity, widgets) in enumerate(text_entity_widgets.items(), 1):
+                sid = f"ha_text_{index}"
+                lines += ["  - platform: homeassistant", f"    id: {sid}", f"    entity_id: {entity}", "    internal: true", "    on_value:", "      then:"]
+                for w in widgets:
+                    prefix = w.text.replace("\\", "\\\\").replace('"', '\\"')
+                    expression = f"std::string(\"{prefix} \") + x" if prefix else "x"
+                    lines += ["        - lvgl.label.update:", f"            id: {w.id}_label", f"            text: !lambda return {expression};"]
             lines.append("")
         lines += ["lvgl:", "  displays: [main_display]", "  touchscreens: [touch_panel]", f"  default_font: {default_font_id}",
-                  "  buffer_size: 25%", "  page_wrap: true", "  pages:", "    - id: main_page", "      bg_color: 0x080B10", "      pad_all: 0", "      widgets:"]
-        if not p.widgets:
-            lines += ["        - label:", "            align: CENTER", f"            text: {q('请在工作台添加组件')}", "            text_color: 0xFFFFFF"]
-        for w in p.widgets:
-            lines.extend(self._widget_lines(w))
+                  "  buffer_size: 25%", "  page_wrap: true", "  pages:"]
+        for page in p.pages:
+            page_widgets = sorted((widget for widget in p.widgets if widget.page == page.id), key=lambda widget: widget.z_index)
+            lines += [f"    - id: {page.id}", f"      bg_color: {color(page.background_color)}", "      pad_all: 0", "      widgets:"]
+            if not page_widgets:
+                lines += ["        - label:", "            align: CENTER", f"            text: {q('空界面')}", "            text_color: 0xFFFFFF"]
+            for widget in page_widgets:
+                lines.extend(self._widget_lines(widget, p.page_animation))
         animations = [w for w in p.widgets if w.animation != "无"]
         if animations:
             lines += ["  animations:"]
@@ -135,24 +195,72 @@ class YamlGenerator:
                           "      timing: round_trip", "      widgets:", f"        - id: {w.id}_root", f"          {prop}:", f"            from: {start}", f"            to: {end}"]
         return "\n".join(lines) + "\n"
 
-    def _widget_lines(self, w: WidgetModel) -> list[str]:
+    def _label_lines(self, w: WidgetModel, indent: str = "              ") -> list[str]:
+        align = {"left": "LEFT_MID", "right": "RIGHT_MID"}.get(w.text_align, "CENTER")
+        text = self._progress_text(w) if w.kind in {"progress_circle", "progress_bar"} else ("--" if w.binding else w.text)
+        return [f"{indent}- label:", f"{indent}    id: {w.id}_label", f"{indent}    align: {align}",
+                f"{indent}    text: {q(text)}", f"{indent}    text_color: {color(w.text_color)}",
+                f"{indent}    text_font: ui_font_{w.font_size}"]
+
+    @staticmethod
+    def _progress_text(w: WidgetModel) -> str:
+        if w.binding:
+            return f"{w.text} --" if w.text else "--"
+        if w.show_value == "percent":
+            percent = (w.progress_value - w.progress_min) * 100 / (w.progress_max - w.progress_min)
+            return f"{w.text} {percent:.0f}%" if w.text else f"{percent:.0f}%"
+        return f"{w.text} {w.progress_value:.0f}" if w.text else f"{w.progress_value:.0f}"
+
+    def _widget_lines(self, w: WidgetModel, page_animation: str) -> list[str]:
         common = [f"            id: {w.id}_root", f"            x: {w.x}", f"            y: {w.y}",
-                  f"            width: {w.width}", f"            height: {w.height}", "            radius: 4", "            pad_all: 0"]
-        if w.kind == "image":
-            return ["        - image:", f"            id: {w.id}_root", f"            x: {w.x}", f"            y: {w.y}",
-                    f"            width: {w.width}", f"            height: {w.height}", f"            src: {w.id}_asset"]
-        if w.kind == "button":
-            result = ["        - button:", *common, f"            bg_color: {color(w.background_color)}", "            widgets:",
-                      "              - label:", f"                  id: {w.id}_label", "                  align: CENTER", f"                  text: {q(w.text)}",
-                      f"                  text_color: {color(w.text_color)}", f"                  text_font: ui_font_{w.font_size}"]
-            if w.action and w.action_entity:
-                result += ["            on_click:", "              then:", "                - homeassistant.action:",
-                           f"                    action: {w.action}", "                    data:", f"                      entity_id: {w.action_entity}"]
-                if w.action == "input_number.set_value":
-                    result += [f"                      value: {q(str(w.action_value))}"]
+                  f"            width: {w.width}", f"            height: {w.height}", f"            radius: {w.radius}", "            pad_all: 0"]
+        if w.kind in {"progress_circle", "progress_bar"}:
+            component = "arc" if w.kind == "progress_circle" else "bar"
+            result = [f"        - {component}:", *common[:-2], f"            min_value: {w.progress_min}",
+                      f"            max_value: {w.progress_max}", f"            value: {w.progress_value}"]
+            if component == "arc":
+                result += ["            start_angle: 135", "            end_angle: 45", "            adjustable: false",
+                           f"            arc_color: {color(w.background_color)}", f"            arc_width: {max(3, w.border_width)}",
+                           "            indicator:", f"              arc_color: {color(w.progress_color)}", f"              arc_width: {max(3, w.border_width)}",
+                           "            knob:", "              bg_opa: TRANSP"]
+            else:
+                result += [f"            bg_color: {color(w.background_color)}", "            indicator:", f"              bg_color: {color(w.progress_color)}"]
+            result += ["            widgets:", *self._label_lines(w)]
             return result
-        text = "--" if w.binding else w.text
-        return ["        - obj:", *common, "            bg_opa: TRANSP", "            border_width: 0", "            widgets:",
-                "              - label:", f"                  id: {w.id}_label", "                  align: CENTER", f"                  text: {q(text)}",
-                f"                  text_color: {color(w.text_color)}", f"                  text_font: ui_font_{w.font_size}"]
+
+        visual = w.kind in {"image", "shape"}
+        button = w.kind in {"button", "page_button"}
+        result = [f"        - {'button' if button else 'obj'}:", *common]
+        if visual and w.shape_type == "line":
+            angle = math.radians(w.line_angle)
+            dx, dy = round(math.cos(angle) * w.line_length), round(math.sin(angle) * w.line_length)
+            x1, y1 = max(0, -dx), max(0, -dy)
+            result += ["            bg_opa: TRANSP", "            border_width: 0", "            widgets:", "              - line:",
+                       f"                  id: {w.id}_line", "                  points:", f"                    - {x1}, {y1}",
+                       f"                    - {x1 + dx}, {y1 + dy}", f"                  line_width: {max(1, w.border_width)}",
+                       f"                  line_color: {color(w.border_color)}"]
+        else:
+            radius = 200 if visual and w.shape_type in {"ellipse", "circle"} else w.radius
+            result[6] = f"            radius: {radius}"
+            result += [f"            bg_color: {color(w.background_color)}", f"            border_color: {color(w.border_color)}",
+                       f"            border_width: {w.border_width}", "            widgets:"]
+            asset_id = f"{w.id}_asset" if w.kind == "image" else f"{w.id}_content_asset"
+            if (w.kind == "image" and w.asset_path) or w.content_asset_path:
+                result += ["              - image:", f"                  id: {w.id}_content", "                  align: CENTER",
+                           f"                  width: {w.width}", f"                  height: {w.height}", f"                  src: {asset_id}"]
+        result += self._label_lines(w)
+        if button and w.click_effect == "scale":
+            result += ["            pressed:", "              transform_width: -4", "              transform_height: -4"]
+        elif button and w.click_effect == "darken":
+            result += ["            pressed:", "              bg_opa: 70%"]
+        animation = page_animation if page_animation in {"FADE_IN", "FADE_OUT", "MOVE_LEFT", "MOVE_RIGHT", "MOVE_TOP", "MOVE_BOTTOM"} else "FADE_IN"
+        if w.kind == "page_button":
+            result += ["            on_click:", "              then:", "                - lvgl.page.show:", f"                    id: {w.target_page}",
+                       f"                    animation: {animation}", "                    time: 300ms"]
+        elif w.action and w.action_entity:
+            result += ["            on_click:", "              then:", "                - homeassistant.action:",
+                       f"                    action: {w.action}", "                    data:", f"                      entity_id: {w.action_entity}"]
+            if w.action == "input_number.set_value":
+                result += [f"                      value: {q(str(w.action_value))}"]
+        return result
 

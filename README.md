@@ -23,14 +23,41 @@ python main.py
 - 动图：ESPHome支持GIF帧动画，但大尺寸或高帧率内容会快速占满16MB Flash并增加PSRAM压力，本版本暂未开放。
 - 视频：ESPHome/LVGL没有适用于该板卡的通用MP4/H.264视频解码链路，本版本不支持视频插入。
 
+## 当前功能
+
+- 图形与图片：统一入口创建矩形，并可在属性栏切换为椭圆、圆形或线条；图形支持填充、边框、圆角和图片内容。
+- 几何调整：椭圆支持横向/纵向半径，圆形保持等半径，线条支持长度和`-180°`至`180°`方向。
+- 文字编辑：所有图形和图片都可以叠加文字；选中组件后可直接在画布中编辑，并分别设置字号、颜色和对齐。
+- 状态组件：提供圆形和柱状状态栏，可设置范围、预览值、颜色以及百分比/原始数值显示。
+- 虚拟按钮：支持按压缩放、按压变暗或关闭反馈，并可调用Home Assistant操作。
+- 多界面：支持新增界面、界面切换按钮、鼠标滚轮切换界面和组件层级调整。
+- 数值操作：鼠标悬停在数字或滑块输入框上时，可以使用滚轮增减数值。
+
 ## Home Assistant准备
 
-1. `ha_xiaomi_home` 需要先把米家中枢极客版变量同步成 HA 数字实体。
-2. 工作台里填写的是 HA 实体 ID，例如 `sensor.people_home_1` 或 `input_number.people_home_1`。
-3. 首次烧录后，在 HA 中添加发现的 ESPHome 设备。
-4. 如按钮需要调用 HA 操作，在 ESPHome 集成的设备配置中启用“允许设备执行 Home Assistant 操作”。
+屏幕推荐使用`米家设备 -> Home Assistant -> ESPHome屏幕`的数据链路。ESPHome设备通过原生API与HA通信，并不直接连接`ha_xiaomi_home`的内部MQTT；项目中的HA地址目前作为记录字段保留，实际连接方向是HA主动连接屏幕设备。
 
-ESPHome 设备通过原生 API 与 HA 通信，并不直接连接 `ha_xiaomi_home` 的内部 MQTT。HA 地址目前作为项目记录字段保留，连接方向是 HA 主动连接屏幕设备。
+1. 在HA的“设置 -> 设备与服务”中配置官方`Xiaomi Home`集成；官方集成未覆盖的设备可按实际环境使用HACS中的`Xiaomi Miot Auto`。
+2. 确保集成登录的账号和地区与米家App一致，然后在“开发者工具 -> 状态”中找到设备实体ID。
+3. 首次烧录后，在HA中添加发现的ESPHome设备，并填写工作台配置的API加密密钥。
+4. 在工作台选择图形、图片或状态栏，填写实体ID，例如`sensor.living_room_temperature`或`climate.living_room`。
+5. 温度、湿度、功率和占用率选择“数值”；空调、门锁、灯光等开关/模式选择“设备状态”。圆形和柱状状态栏只能绑定数值实体。
+6. 按钮需要控制设备时，填写HA操作和实体，例如`light.toggle`与`light.living_room`，并在ESPHome集成中允许设备执行Home Assistant操作。
+
+CPU、内存和磁盘数据可通过HA“系统监视器”集成提供；PC或服务器的CPU/GPU数据可通过Glances接入。常见实体包括`sensor.processor_use`、`sensor.memory_use_percent`和`sensor.pc_gpu_load`，实际名称以HA开发者工具中显示的实体ID为准。
+
+如果米家设备把数值放在实体属性中，例如空调的`current_temperature`，可先在HA中创建模板传感器，再把生成的`sensor`实体绑定到状态栏：
+
+```yaml configuration.yaml
+# ... existing configuration ...
+template:
+  - sensor:
+      - name: "客厅空调当前温度"
+        unique_id: living_room_ac_current_temperature
+        unit_of_measurement: "°C"
+        state: >
+          {{ state_attr('climate.living_room', 'current_temperature') }}
+```
 
 ## 模块
 
@@ -43,6 +70,19 @@ ESPHome 设备通过原生 API 与 HA 通信，并不直接连接 `ha_xiaomi_hom
 
 
 ## 更新记录
+
+### 2026-07-23（图形、状态栏与米家状态联动）
+
+- 将文本、图片和基础形状整合为“图形与图片”工作流，旧文本组件在浏览器中自动按矩形图形处理。
+- 为矩形、椭圆、圆形、线条和图片统一增加叠加文字、字号、颜色、对齐、图片内容及Home Assistant实体绑定。
+- 增加椭圆横向/纵向半径、圆形等半径、线条长度和方向参数，并让画布缩放与几何参数同步。
+- 增加数字和滑块输入框的鼠标滚轮调节，支持在画布中直接编辑各组件文字。
+- 增加圆形状态栏和柱状状态栏，支持范围、预览值、进度颜色、百分比/数值显示以及HA实时更新。
+- 将实体绑定分为“数值”和“设备状态”，分别生成ESPHome Home Assistant `sensor`与`text_sensor`配置。
+- 增加虚拟按钮按压缩放、按压变暗和无反馈三种触摸效果，并同步生成LVGL `pressed`样式。
+- 完善多界面、界面切换按钮、滚轮换页、组件层级、图片裁切与固件图片预处理。
+- 补充米家设备、HA模板传感器、CPU/GPU状态投屏和按钮控制说明。
+- 通过6项单元测试、前端语法检查、浏览器交互检查及ESPHome `2026.7.1`真实配置校验。
 
 ### 2026-07-22（Web工作台）
 

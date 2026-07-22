@@ -25,9 +25,11 @@
   <main class="workspace">
     <aside class="palette panel">
       <div class="panel-title">组件</div>
-      <button class="tool" data-kind="label"><span class="tool-icon">T</span><span>文本</span></button>
-      <button class="tool" data-kind="button"><span class="tool-icon">B</span><span>触摸按钮</span></button>
-      <button class="tool" id="imageTool"><span class="tool-icon">I</span><span>图片</span></button>
+      <button class="tool visual-tool" data-kind="shape" data-shape="rectangle"><span class="tool-icon">G</span><span><strong>图形与图片</strong><small>矩形 · 椭圆 · 圆形 · 线条 · 图片</small></span></button>
+      <button class="tool" data-kind="button"><span class="tool-icon">B</span><span>虚拟按钮</span></button>
+      <button class="tool" data-kind="progress_circle"><span class="tool-icon">%</span><span>圆形状态栏</span></button>
+      <button class="tool" data-kind="progress_bar"><span class="tool-icon">▮</span><span>柱状状态栏</span></button>
+      <button class="tool" data-kind="page_button"><span class="tool-icon">P</span><span>界面切换</span></button>
       <button class="tool disabled" id="videoTool" title="ESPHome没有适用于此板卡的通用视频解码组件"><span class="tool-icon">V</span><span>视频</span><b>不支持</b></button>
       <input id="imageInput" type="file" accept="image/png,image/jpeg,image/webp,image/bmp" hidden>
       <div class="palette-separator"></div>
@@ -41,6 +43,8 @@
         <div class="segmented" role="group" aria-label="画布缩放">
           <button data-zoom="0.6">60%</button><button data-zoom="0.8">80%</button><button class="active" data-zoom="1">100%</button>
         </div>
+        <div id="pageTabs" class="page-tabs"></div>
+        <button id="addPageBtn" class="icon-command" title="新建界面">+</button>
         <span id="selectionInfo">未选择组件</span>
         <button id="deleteBtn" class="icon-command" disabled>删除</button>
       </div>
@@ -78,7 +82,10 @@
         <section class="form-section" id="contentSection"><h2>内容</h2>
           <label id="textRow">文字<input data-widget="text"></label>
           <label id="bindingRow">绑定实体<input data-widget="binding" placeholder="sensor.people_home_1"></label>
+          <label id="bindingTypeRow">绑定类型<select data-widget="binding_type"><option value="number">数值</option><option value="state">设备状态</option></select></label>
           <div id="assetRow" class="asset-preview hidden"><img id="assetPreview" alt="组件图片"><button id="replaceImage" class="button">替换图片</button></div>
+          <div id="contentAssetRow" class="asset-actions hidden"><button id="attachImage" class="button">加载图片</button><button id="removeContentImage" class="button">移除图片</button></div>
+          <label id="targetPageRow" class="hidden">目标界面<select data-widget="target_page"></select></label>
         </section>
         <section class="form-section"><h2>布局</h2>
           <div class="field-grid">
@@ -87,13 +94,35 @@
             <label>宽度<input type="number" min="20" max="800" data-widget-number="width"></label>
             <label>高度<input type="number" min="20" max="480" data-widget-number="height"></label>
           </div>
+          <label>所在界面<select data-widget="page" id="widgetPage"></select></label>
+          <div class="layer-actions"><button data-layer="bottom" title="置底">置底</button><button data-layer="down" title="下移一层">下移</button><button data-layer="up" title="上移一层">上移</button><button data-layer="top" title="置顶">置顶</button></div>
+        </section>
+        <section class="form-section hidden" id="geometrySection"><h2>几何</h2>
+          <div id="ellipseGeometry" class="field-grid hidden"><label>横向半径<input type="number" min="10" max="400" data-widget-number="ellipse_radius_x"></label><label>纵向半径<input type="number" min="10" max="240" data-widget-number="ellipse_radius_y"></label></div>
+          <div id="lineGeometry" class="field-grid hidden"><label>长度<input type="number" min="10" max="900" data-widget-number="line_length"></label><label>方向<input type="number" min="-180" max="180" data-widget-number="line_angle"></label></div>
+        </section>
+        <section class="form-section hidden" id="progressSection"><h2>状态范围</h2>
+          <div class="field-grid"><label>最小值<input type="number" data-widget-number="progress_min"></label><label>最大值<input type="number" data-widget-number="progress_max"></label><label>预览值<input type="number" data-widget-number="progress_value"></label><label>进度颜色<input type="color" data-widget="progress_color"></label></div>
+          <label>显示方式<select data-widget="show_value"><option value="percent">百分比</option><option value="value">数值</option></select></label>
+        </section>
+        <section class="form-section hidden" id="imageSection"><h2>图片裁切</h2>
+          <label>适配方式<select data-widget="image_fit"><option value="fill">拉伸填充</option><option value="cover">等比裁切</option><option value="contain">完整包含</option></select></label>
+          <div class="field-grid"><label>水平焦点<input type="range" min="0" max="100" data-widget-number="image_offset_x"></label><label>垂直焦点<input type="range" min="0" max="100" data-widget-number="image_offset_y"></label></div>
         </section>
         <section class="form-section" id="styleSection"><h2>样式</h2>
-          <label>字号<input type="number" min="8" max="96" data-widget-number="font_size"></label>
+          <label id="shapeTypeRow" class="hidden">类型<select data-widget="shape_type"><option value="rectangle">矩形</option><option value="ellipse">椭圆</option><option value="circle">圆形</option><option value="line">线条</option></select></label>
           <div class="field-grid">
-            <label>文字颜色<input type="color" data-widget="text_color"></label>
-            <label>背景颜色<input type="color" data-widget="background_color"></label>
+            <label id="fontSizeRow">字号<input type="number" min="8" max="96" data-widget-number="font_size"></label>
+            <label id="textAlignRow">文字对齐<select data-widget="text_align"><option value="left">左</option><option value="center">中</option><option value="right">右</option></select></label>
           </div>
+          <div class="field-grid">
+            <label id="textColorRow">文字颜色<input type="color" data-widget="text_color"></label>
+            <label>填充颜色<input type="color" data-widget="background_color"></label>
+            <label>边框颜色<input type="color" data-widget="border_color"></label>
+            <label>边框宽度<input type="number" min="0" max="24" data-widget-number="border_width"></label>
+            <label>圆角<input type="number" min="0" max="200" data-widget-number="radius"></label>
+          </div>
+          <label id="clickEffectRow" class="hidden">点击效果<select data-widget="click_effect"><option value="scale">按压缩放</option><option value="darken">按压变暗</option><option value="none">无</option></select></label>
           <label>动画<select data-widget="animation"><option>无</option><option>渐显</option><option>滚动</option></select></label>
         </section>
         <section class="form-section" id="actionSection"><h2>触摸操作</h2>
