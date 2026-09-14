@@ -115,6 +115,27 @@ class WorkbenchComponentsTests(unittest.TestCase):
         self.assertFalse(nodes["readonly_choice_root"]["clickable"])
         self.assertNotIn("homeassistant.action", str(data["text_sensor"]))
 
+    def test_action_only_state_mapping_does_not_override_configured_colour(self):
+        data = self.compile([WidgetModel(id="plus", kind="shape", shape_type="circle",
+                                         background_color="#FA9FC8", background_opacity=100,
+                                         state_mapping=True, action="input_number.increment",
+                                         action_entity="input_number.people", tap_mode="ha")])
+        nodes = dict(objects(data))
+        self.assertEqual(nodes["plus_root"]["bg_color"], int("FA9FC8", 16))
+        self.assertEqual(nodes["plus_root"]["bg_opa"], "100%")
+        self.assertNotIn("plus_bevel_top", nodes)
+
+    def test_state_variant_keeps_shared_container_opacity(self):
+        data = self.compile([WidgetModel(id="mode", kind="shape", binding="switch.mode", binding_type="state",
+                                         background_color="#112233", background_opacity=0,
+                                         state_variants=[dict(value="off", label="", background_color="#334455",
+                                                               opacity=100, depth="inset"),
+                                                         dict(value="on", label="", background_color="#556677",
+                                                               opacity=100, depth="raised")])])
+        nodes = dict(objects(data))
+        self.assertEqual(nodes["mode_root"]["bg_opa"], "0%")
+        self.assertNotIn("lv_obj_set_style_bg_opa", str(data["text_sensor"]))
+
 
 if __name__ == "__main__":
     unittest.main()

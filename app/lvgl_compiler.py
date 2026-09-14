@@ -48,6 +48,13 @@ def variants(w):
         return []
     if w.state_variants:
         return w.state_variants
+    # Automatic on/off variants only make sense for widgets that receive a
+    # state value. Action-only widgets (for example +/- buttons) may still
+    # carry the editor's default state_mapping flag, but applying those
+    # variants would replace their configured colour with the off-state
+    # colour at startup.
+    if not w.binding:
+        return []
     if not (w.state_mapping or w.state_icon_enabled):
         return []
     return [dict(value=value, label=label, icon_glyph=glyph, text_color=colour if w.state_icon_enabled else w.text_color,
@@ -136,8 +143,7 @@ class LvglCompiler:
         if not vs:
             return
         v = next((v for v in vs if v["value"] == w.state_preview), vs[0])
-        body.update(bg_color=rgb(v.get("background_color") or w.background_color), bg_opa=opa(v.get("opacity", w.background_opacity)), clip_corner=True)
-        # Background opacity is shared by all states, as in the editor.
+        body.update(bg_color=rgb(v.get("background_color") or w.background_color), bg_opa=opa(w.background_opacity), clip_corner=True)
         body.update(shadow_width=9 if v.get("depth") == "raised" else 0, shadow_offset_y=4, shadow_color=0,
                     shadow_opa="55%" if v.get("depth") == "raised" else "0%")
         for side, align, direction, first, last in [("top", "TOP_MID", "VER", "68%", "0%"), ("left", "LEFT_MID", "HOR", "68%", "0%"),

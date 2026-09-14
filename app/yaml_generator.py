@@ -47,7 +47,10 @@ class YamlGenerator:
         font_dir = Path.home() / ".mijia-panel" / "fonts"
         font_dir.mkdir(parents=True, exist_ok=True)
         target = font_dir / source.name
-        if source.resolve() != target.resolve():
+        # The staged cache may be held open by the running workbench or by
+        # another ESPHome process. Reuse an existing valid copy instead of
+        # trying to overwrite it on every generation.
+        if source.resolve() != target.resolve() and not target.is_file():
             shutil.copy2(source, target)
         return target.as_posix()
 
