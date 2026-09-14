@@ -136,7 +136,7 @@ class LvglCompiler:
         if not vs:
             return
         v = next((v for v in vs if v["value"] == w.state_preview), vs[0])
-        body.update(bg_color=rgb(v.get("background_color") or w.background_color), clip_corner=True)
+        body.update(bg_color=rgb(v.get("background_color") or w.background_color), bg_opa=opa(v.get("opacity", w.background_opacity)), clip_corner=True)
         # Background opacity is shared by all states, as in the editor.
         body.update(shadow_width=9 if v.get("depth") == "raised" else 0, shadow_offset_y=4, shadow_color=0,
                     shadow_opa="55%" if v.get("depth") == "raised" else "0%")
@@ -310,7 +310,8 @@ class LvglCompiler:
             return {f"lvgl.{w.kind}.update": {"id": w.id + "_root", "selected_text": Lambda("return x;")}}
         else:
             expression = "x"
-            if w.ha_state_profile not in {"sensor:light_status", "sensor:zero_off"}:
+            sensor_state = w.binding.startswith("sensor.") and w.state_mapping
+            if w.ha_state_profile not in {"sensor:light_status", "sensor:zero_off", "sensor:custom"} and not sensor_state:
                 for v in reversed(vs):
                     test = f'x == {cpp(v["value"])}'
                     if not w.state_variants:
@@ -324,7 +325,7 @@ class LvglCompiler:
                 if not w.state_variants:
                     on = f'x {"!=" if w.state_match == "not_equals" else "=="} {cpp(w.state_on_value)}'
                     test = on if v["value"] == "on" else f"!({on})"
-                if w.ha_state_profile in {"sensor:light_status", "sensor:zero_off", "sensor:custom"}:
+                if w.ha_state_profile in {"sensor:light_status", "sensor:zero_off", "sensor:custom"} or (w.binding.startswith("sensor.") and w.state_mapping):
                     closed = f'x == {cpp(w.state_on_value)}'
                     test = f'({closed})' if v["value"] in {"off", "closed"} else f'!({closed})'
                 code.append(("if" if index == 0 else "else if") + f" ({test}) {{")
