@@ -6,6 +6,7 @@ venv/
 
 # Generated ESPHome output and local project data
 build/
+projects/
 .esphome/
 .pioenvs/
 .piolibdeps/

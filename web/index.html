@@ -14,28 +14,112 @@
     </div>
     <div class="top-actions">
       <span id="saveState" class="status-dot">已保存</span>
+      <button id="undoBtn" class="button" title="撤销（Ctrl+Z）" aria-label="撤销" disabled>↶</button>
+      <button id="redoBtn" class="button" title="重做（Ctrl+Y）" aria-label="重做" disabled>↷</button>
       <button id="generateBtn" class="button">生成配置</button>
       <button id="validateBtn" class="button">校验</button>
+      <button id="resourceBtn" class="button" title="分析图片、字体、固件和Flash占用">资源分析</button>
+      <button id="diagnosticBtn" class="button" title="生成不含密码和密钥的诊断报告">诊断报告</button>
+
       <button id="compileBtn" class="button primary">编译固件</button>
+      <select id="uploadMode" aria-label="烧录方式"><option value="serial">USB</option><option value="ota">无线 OTA</option></select>
       <select id="portSelect" aria-label="烧录串口"><option value="">选择串口</option></select>
+      <input id="otaTarget" class="hidden" list="otaDevices" aria-label="无线设备地址" placeholder="设备IP或名称.local">
+      <datalist id="otaDevices"></datalist>
+      <button id="discoverDevicesBtn" class="button hidden" title="发现局域网内的ESPHome设备">发现设备</button>
+      <button id="inspectDeviceBtn" class="button" title="读取芯片、MAC和Flash信息">识别设备</button>
+      <button id="inspectRuntimeBtn" class="button" title="通过局域网读取运行固件版本">运行版本</button>
+
+      <span id="deviceInfo" class="device-info" aria-live="polite"></span>
       <button id="flashBtn" class="button danger">烧录</button>
     </div>
   </header>
 
   <main class="workspace">
     <aside class="palette panel">
-      <div class="panel-title">组件</div>
-      <button class="tool visual-tool" data-kind="shape" data-shape="rectangle"><span class="tool-icon">G</span><span><strong>图形与图片</strong><small>矩形 · 椭圆 · 圆形 · 线条 · 图片</small></span></button>
-      <button class="tool" data-kind="button"><span class="tool-icon">B</span><span>虚拟按钮</span></button>
-      <button class="tool" data-kind="progress_circle"><span class="tool-icon">%</span><span>圆形状态栏</span></button>
-      <button class="tool" data-kind="progress_bar"><span class="tool-icon">▮</span><span>柱状状态栏</span></button>
-      <button class="tool" data-kind="page_button"><span class="tool-icon">P</span><span>界面切换</span></button>
-      <button class="tool disabled" id="videoTool" title="ESPHome没有适用于此板卡的通用视频解码组件"><span class="tool-icon">V</span><span>视频</span><b>不支持</b></button>
+      <div class="panel-title palette-title">组件库</div>
+      <button class="tool visual-tool ha-entity-tool" id="addHaEntityControl"><span class="tool-icon">HA</span><span><strong>HA 实体控件</strong><small>先选实体，再选兼容外观</small></span></button>
+      <details class="palette-group" open>
+        <summary>基础绘制 <small>LVGL原生节点</small></summary>
+        <div class="palette-group-body">
+          <button class="tool visual-tool" data-kind="shape" data-shape="rectangle"><span class="tool-icon">□</span><span><strong>矩形</strong><small>obj · 卡片与文本容器</small></span></button>
+          <button class="tool compact" data-kind="shape" data-shape="ellipse"><span class="tool-icon">⬭</span><span>椭圆</span></button>
+          <button class="tool compact" data-kind="shape" data-shape="circle"><span class="tool-icon">○</span><span>圆形</span></button>
+          <button class="tool compact" data-kind="shape" data-shape="line"><span class="tool-icon">—</span><span>线条</span></button>
+          <button class="tool compact" data-kind="container"><span class="tool-icon">▣</span><span>布局容器</span></button>
+          <button class="tool compact" data-kind="tabview"><span class="tool-icon">页</span><span>标签页</span></button>
+          <button class="tool compact" data-kind="tileview"><span class="tool-icon">田</span><span>磁贴页</span></button>
+          <button class="tool compact" data-template="icons"><span class="tool-icon">◎</span><span>文字与图标</span></button>
+        </div>
+      </details>
+
+      <details class="palette-group" open>
+        <summary>本地交互控件 <small>不自动绑定HA</small></summary>
+        <div class="palette-group-body compact-grid">
+          <button class="tool compact" data-kind="slider"><span class="tool-icon">↔</span><span>滑块</span></button>
+          <button class="tool compact" data-kind="switch"><span class="tool-icon">◉</span><span>开关</span></button>
+          <button class="tool compact" data-kind="checkbox"><span class="tool-icon">✓</span><span>复选框</span></button>
+          <button class="tool compact" data-kind="dropdown"><span class="tool-icon">⌄</span><span>下拉选择</span></button>
+          <button class="tool compact" data-kind="roller"><span class="tool-icon">↕</span><span>滚轮选择</span></button>
+          <button class="tool compact" data-kind="spinbox"><span class="tool-icon">#</span><span>数字调节</span></button>
+          <button class="tool compact" data-kind="spinner"><span class="tool-icon">◌</span><span>加载动画</span></button>
+          <button class="tool compact" data-kind="led"><span class="tool-icon">●</span><span>LED指示</span></button>
+          <button class="tool compact" data-kind="qrcode"><span class="tool-icon">▦</span><span>二维码</span></button>
+          <button class="tool compact" data-kind="textarea"><span class="tool-icon">T</span><span>文本输入</span></button>
+          <button class="tool compact" data-template="input_keyboard"><span class="tool-icon">⌨</span><span>屏幕键盘</span></button>
+          <button class="tool compact" data-kind="buttonmatrix"><span class="tool-icon">▦</span><span>按钮矩阵</span></button>
+          <button class="tool compact" data-kind="msgbox"><span class="tool-icon">!</span><span>消息框</span></button>
+        </div>
+      </details>
+
+      <details class="palette-group" open>
+        <summary>数据与状态 <small>原生节点组合</small></summary>
+        <div class="palette-group-body compact-grid">
+          <button class="tool compact" data-template="meter"><span class="tool-icon">仪</span><span>数值仪表</span></button>
+          <button class="tool compact" data-template="battery"><span class="tool-icon">电</span><span>电池状态</span></button>
+          <button class="tool compact" data-template="clock"><span class="tool-icon">时</span><span>日期时钟</span></button>
+          <button class="tool compact" data-template="wifi"><span class="tool-icon">网</span><span>WiFi状态</span></button>
+          <button class="tool compact" data-template="status_icon"><span class="tool-icon">态</span><span>状态图标</span></button>
+          <button class="tool compact" data-template="room_lights"><span class="tool-icon">灯</span><span>房间灯光状态</span></button>
+          <button class="tool compact" data-kind="trend_chart"><span class="tool-icon">⌁</span><span>趋势图</span></button>
+          <button class="tool compact" data-kind="table"><span class="tool-icon">表</span><span>数据表格</span></button>
+        </div>
+      </details>
+
+      <details class="palette-group">
+        <summary>智能家居 <small>业务组合组件</small></summary>
+        <div class="palette-group-body">
+          <button class="tool compact" data-template="smart_home"><span class="tool-icon">家</span><span>智能家居卡片</span></button>
+          <button class="tool compact" data-template="settings"><span class="tool-icon">设</span><span>本机设置页</span></button>
+        </div>
+      </details>
+
+      <details class="palette-group">
+        <summary>我的模板</summary>
+        <div class="palette-group-body">
+          <select id="userTemplateSelect"><option value="">暂无模板</option></select>
+          <div class="asset-actions"><button id="saveTemplateBtn" class="button">保存选中</button><button id="loadTemplateBtn" class="button">插入模板</button></div>
+        </div>
+      </details>
       <input id="imageInput" type="file" accept="image/png,image/jpeg,image/webp,image/bmp" hidden>
+
+      <details class="palette-group">
+        <summary>项目工具</summary>
+        <div class="palette-group-body compact-grid">
+          <button class="tool compact" id="projectSettings"><span class="tool-icon">S</span><span>设备与网络</span></button>
+          <button class="tool compact" id="exportProject"><span class="tool-icon">E</span><span>导出项目</span></button>
+          <button class="tool compact" id="importProject"><span class="tool-icon">I</span><span>导入项目</span></button>
+          <button class="tool compact" id="restoreProject"><span class="tool-icon">H</span><span>恢复备份</span></button>
+          <button class="tool compact" id="refreshPorts"><span class="tool-icon">R</span><span>刷新串口</span></button>
+          <button class="tool compact disabled" id="videoTool" title="ESPHome没有适用于此板卡的通用视频解码组件"><span class="tool-icon">V</span><span>视频不支持</span></button>
+        </div>
+      </details>
+      <input id="projectFileInput" type="file" accept="application/json,.json" hidden>
+
       <div class="palette-separator"></div>
-      <div class="panel-title">项目</div>
-      <button class="tool compact" id="projectSettings"><span class="tool-icon">S</span><span>设备与网络</span></button>
-      <button class="tool compact" id="refreshPorts"><span class="tool-icon">R</span><span>刷新串口</span></button>
+      <div class="panel-title">图层</div>
+      <input id="layerSearch" type="search" placeholder="搜索组件">
+      <div id="layerTree" class="layer-tree"></div>
     </aside>
 
     <section class="stage">
@@ -45,8 +129,24 @@
         </div>
         <div id="pageTabs" class="page-tabs"></div>
         <button id="addPageBtn" class="icon-command" title="新建界面">+</button>
+        <button id="duplicatePageBtn" class="icon-command" title="复制当前界面">复制页</button>
+        <button id="movePageLeftBtn" class="icon-command" title="页面前移">←</button>
+        <button id="movePageRightBtn" class="icon-command" title="页面后移">→</button>
+        <button id="deletePageBtn" class="icon-command" title="删除当前界面" aria-label="删除当前界面">−</button>
+
+        <span class="toolbar-break" aria-hidden="true"></span>
         <span id="selectionInfo">未选择组件</span>
-        <button id="deleteBtn" class="icon-command" disabled>删除</button>
+        <div class="selection-actions">
+          <button id="copyBtn" class="icon-command" title="复制组件 Ctrl+C" disabled>复制</button>
+          <button id="pasteBtn" class="icon-command" title="粘贴组件 Ctrl+V" disabled>粘贴</button>
+          <button id="copyStyleBtn" class="icon-command" title="复制格式 Ctrl+Shift+C" disabled>复制格式</button>
+          <button id="pasteStyleBtn" class="icon-command" title="粘贴格式 Ctrl+Shift+V" disabled>粘贴格式</button>
+          <button id="lockBtn" class="icon-command" disabled>锁定</button>
+          <button id="hideBtn" class="icon-command" disabled>隐藏</button>
+          <button id="groupBtn" class="icon-command" disabled>成组</button>
+          <button id="ungroupBtn" class="icon-command" disabled>解组</button>
+          <button id="deleteBtn" class="icon-command" disabled>删除</button>
+        </div>
       </div>
       <div class="canvas-scroll">
         <div class="screen-shell" id="screenShell">
@@ -62,15 +162,42 @@
         <section class="form-section"><h2>设备</h2>
           <label>项目名称<input data-project="name"></label>
           <label>设备名称<input data-project="device_name"></label>
+          <label>固件版本<input data-project="firmware_version" placeholder="1.0.0"></label>
+
+        </section>
+                <section class="form-section"><h2>当前界面</h2>
+          <label>编辑界面<select id="activePageSelect"></select></label>
+          <label><input id="defaultPage" type="checkbox"> 设为默认启动界面</label>
+          <label>界面名称<input data-page="name"></label>
+          <div class="field-grid"><label>背景颜色<input type="color" data-page="background_color"></label><label>渐变颜色<input type="color" data-page="background_color_2"></label></div>
+          <label>背景方式<select data-page="background_gradient"><option value="none">纯色</option><option value="horizontal">横向渐变</option><option value="vertical">纵向渐变</option></select></label>
         </section>
         <section class="form-section"><h2>网络</h2>
+
           <label>WiFi名称<input data-project="wifi_ssid"></label>
           <label>WiFi密码<input type="password" data-project="wifi_password"></label>
           <label>Home Assistant地址<input data-project="ha_address" placeholder="http://homeassistant.local:8123"></label>
+          <label>Bluetooth Proxy<select data-project="bluetooth_proxy" data-project-type="boolean"><option value="false">关闭</option><option value="true">启用</option></select></label>
+          <label>默认息屏时间<select data-project="auto_screen_off" data-project-type="number"><option value="0">长亮</option><option value="30">30秒</option><option value="60">1分钟</option><option value="120">2分钟</option><option value="300">5分钟（推荐）</option><option value="600">10分钟</option><option value="1800">30分钟</option></select></label>
         </section>
         <section class="form-section"><h2>安全</h2>
           <label>API加密密钥<input type="password" data-project="api_key"></label>
           <label>OTA密码<input type="password" data-project="ota_password"></label>
+        </section>
+        <section class="form-section"><h2>全局主题</h2>
+          <label>主题预设<select id="themePreset" data-project="theme_name"><option value="graphite">石墨</option><option value="light">明亮</option><option value="home">智能家居</option><option value="night">夜间</option></select></label>
+          <div class="field-grid"><label>强调色<input type="color" data-project="theme_accent"></label><label>卡片色<input type="color" data-project="theme_surface"></label><label>文字色<input type="color" data-project="theme_text"></label><label>默认圆角<input type="number" min="0" max="40" data-project="theme_radius"></label></div>
+          <button id="applyThemeBtn" class="button">应用主题到当前页面</button>
+        </section>
+        <section class="form-section"><h2>18650与INA检测</h2>
+          <label>启用电池检测<select data-project="battery_monitor" data-project-type="boolean"><option value="false">关闭</option><option value="true">启用</option></select></label>
+          <div class="field-grid"><label>检测芯片<select data-project="battery_chip"><option value="ina219">INA219</option><option value="ina226">INA226</option></select></label><label>I2C地址<input data-project="battery_address" placeholder="0x40"></label></div>
+          <div class="field-grid"><label>满电电压<input type="number" step="0.01" data-project="battery_full_voltage"></label><label>低电电压<input type="number" step="0.01" data-project="battery_low_voltage"></label></div>
+          <div class="field-grid"><label>电压校准偏移<input type="number" step="0.001" data-project="battery_voltage_offset"></label><label>采样间隔（秒）<input type="number" min="1" max="300" data-project="battery_sample_interval"></label></div>
+          <div class="field-grid"><label>采样电阻（Ω）<input type="number" step="0.001" data-project="battery_shunt_resistance"></label><label>最大电流（A）<input type="number" step="0.1" data-project="battery_max_current"></label></div>
+          <div class="field-grid"><label>电池组总能量（mWh）<input type="number" min="100" data-project="battery_capacity_mwh"></label><label>首次电量（%）<input type="number" min="0" max="100" data-project="battery_initial_percent"></label></div>
+          <label>INA226电流方向<select data-project="battery_current_inverted" data-project-type="boolean"><option value="false">正值=充电</option><option value="true">正值=放电（反向）</option></select></label>
+          <small class="field-hint">并联电池填写整组能量；若每节均为9250mWh，两节填写18500mWh。电量从“首次电量”开始，根据测得的充放电能量估算并保存；只并接电压线无法累计电量。INA226的VIN+与VIN-需串联在实际充放电路径中。</small>
         </section>
         <section class="form-section"><h2>米家变量</h2>
           <label>在家人数1<input data-project="people_entity_1"></label>
@@ -79,65 +206,179 @@
       </div>
 
       <div id="widgetForm" class="form-scroll hidden">
-        <section class="form-section" id="contentSection"><h2>内容</h2>
+        <section class="form-section inspector-group inspector-binding" id="contentSection"><h2>功能绑定</h2>
           <label id="textRow">文字<input data-widget="text"></label>
           <label id="bindingRow">绑定实体<input data-widget="binding" placeholder="sensor.people_home_1"></label>
           <label id="bindingTypeRow">绑定类型<select data-widget="binding_type"><option value="number">数值</option><option value="state">设备状态</option></select></label>
+          <div id="valueFormatRow" class="field-grid"><label>数值单位<input data-widget="value_suffix" placeholder="°C / % / V"></label><label>小数位<input type="number" min="0" max="3" data-widget-number="value_decimals"></label></div>
+        </section>
+        <section class="form-section hidden" id="stateMapSection"><h2>状态反馈</h2>
+            <label>启用状态映射<select data-widget="state_mapping" data-widget-type="boolean"><option value="false">关闭</option><option value="true">启用</option></select></label><small class="field-hint numeric-state-hint">开启状态值匹配后，可为不同状态设置颜色、图标和凹凸效果。</small>
+            <label><span id="stateOnValueLabel">开启状态值</span><input data-widget="state_on_value" placeholder="on"></label>
+            <div class="field-grid"><label>开启文字<input data-widget="state_on_text"></label><label>关闭文字<input data-widget="state_off_text"></label><label>开启颜色<input type="color" data-widget="state_on_color"></label><label>关闭颜色<input type="color" data-widget="state_off_color"></label></div>
+            <div class="field-grid"><label>开启背景不透明度<input type="range" min="0" max="100" step="1" data-widget-number="state_on_bg_opacity"></label><label>关闭背景不透明度<input type="range" min="0" max="100" step="1" data-widget-number="state_off_bg_opacity"></label></div>
+            <div class="field-grid"><label>状态视觉<select data-widget="state_visual"><option value="color">颜色变化</option><option value="depth">视觉深度</option><option value="both">颜色 + 深度</option></select></label><label>画布预览<select data-widget="state_preview"><option value="off">关闭状态</option><option value="on">开启状态</option></select></label></div>
+            <div id="stateIconRows" class="hidden">
+              <label>双状态图标<select data-widget="state_icon_enabled" data-widget-type="boolean"><option value="false">关闭</option><option value="true">启用</option></select></label>
+              <div class="asset-actions"><button id="selectStateOnIcon" class="button" type="button">选择“在/睡眠”图标</button><button id="selectStateOffIcon" class="button" type="button">选择“不在/起床”图标</button></div>
+              <small id="stateIconNames" class="field-hint"></small>
+            </div>
+            <label>条件显示<select data-widget="visibility_mode"><option value="always">始终显示</option><option value="state_equals">状态等于</option><option value="state_not_equals">状态不等于</option></select></label>
+            <label>条件状态<input data-widget="visible_state" placeholder="on"></label>
+        </section>
+        <section class="form-section" id="assetContentSection"><h2>图片素材</h2>
           <div id="assetRow" class="asset-preview hidden"><img id="assetPreview" alt="组件图片"><button id="replaceImage" class="button">替换图片</button></div>
           <div id="contentAssetRow" class="asset-actions hidden"><button id="attachImage" class="button">加载图片</button><button id="removeContentImage" class="button">移除图片</button></div>
-          <label id="targetPageRow" class="hidden">目标界面<select data-widget="target_page"></select></label>
         </section>
-        <section class="form-section"><h2>布局</h2>
+        <section class="form-section"><h2>布局与层级</h2>
           <div class="field-grid">
             <label>X<input type="number" min="0" max="800" data-widget-number="x"></label>
             <label>Y<input type="number" min="0" max="480" data-widget-number="y"></label>
             <label>宽度<input type="number" min="20" max="800" data-widget-number="width"></label>
             <label>高度<input type="number" min="20" max="480" data-widget-number="height"></label>
           </div>
-          <label>所在界面<select data-widget="page" id="widgetPage"></select></label>
+          <label>所在界面（可多选）<select data-widget="pages" id="widgetPage" multiple size="4"></select></label>
+          <label>父容器<select data-widget="parent_id" id="parentContainer"><option value="">无（页面根级）</option></select></label>
+          <label>点击后切换页面<select id="pageSwitchEnabled"><option value="false">不切换</option><option value="true">切换到指定页面</option></select></label>
+          <label id="layoutTargetPageRow" class="hidden">目标子页面<select id="layoutTargetPage"></select></label>
+          <small class="field-hint">开启后，此组件的点击用于切换页面。关闭后可在 HA 功能控制中设置操作。</small>
+          <small id="sharedLayerHint" class="field-hint hidden"></small>
           <div class="layer-actions"><button data-layer="bottom" title="置底">置底</button><button data-layer="down" title="下移一层">下移</button><button data-layer="up" title="上移一层">上移</button><button data-layer="top" title="置顶">置顶</button></div>
+          <div class="layer-actions"><button data-align="left">左对齐</button><button data-align="center">水平居中</button><button data-align="right">右对齐</button></div>
+          <div class="layer-actions"><button data-align="top">顶对齐</button><button data-align="middle">垂直居中</button><button data-align="bottom">底对齐</button></div>
+          <div class="layer-actions"><button data-distribute="horizontal">水平等距</button><button data-distribute="vertical">垂直等距</button></div>
         </section>
-        <section class="form-section hidden" id="geometrySection"><h2>几何</h2>
+        <section class="form-section hidden component-specific" id="geometrySection"><h2>形状与几何</h2>
+          <label id="shapeTypeRow">形状类型<select data-widget="shape_type"><option value="rectangle">矩形</option><option value="ellipse">椭圆</option><option value="circle">圆形</option><option value="line">线条</option></select></label>
           <div id="ellipseGeometry" class="field-grid hidden"><label>横向半径<input type="number" min="10" max="400" data-widget-number="ellipse_radius_x"></label><label>纵向半径<input type="number" min="10" max="240" data-widget-number="ellipse_radius_y"></label></div>
           <div id="lineGeometry" class="field-grid hidden"><label>长度<input type="number" min="10" max="900" data-widget-number="line_length"></label><label>方向<input type="number" min="-180" max="180" data-widget-number="line_angle"></label></div>
         </section>
-        <section class="form-section hidden" id="progressSection"><h2>状态范围</h2>
-          <div class="field-grid"><label>最小值<input type="number" data-widget-number="progress_min"></label><label>最大值<input type="number" data-widget-number="progress_max"></label><label>预览值<input type="number" data-widget-number="progress_value"></label><label>进度颜色<input type="color" data-widget="progress_color"></label></div>
-          <label>显示方式<select data-widget="show_value"><option value="percent">百分比</option><option value="value">数值</option></select></label>
+        <section class="form-section hidden component-specific" id="progressSection"><h2 id="progressSectionTitle">数值与进度</h2>
+          <div class="field-grid"><label>最小值<input type="number" data-widget-number="progress_min"></label><label>最大值<input type="number" data-widget-number="progress_max"></label><label id="progressPreviewRow">预览值<input type="number" data-widget-number="progress_value"></label><label id="progressColorRow">进度颜色<input type="color" data-widget="progress_color"></label></div>
+          <label id="showValueRow">显示方式<select data-widget="show_value"><option value="percent">百分比</option><option value="value">数值</option></select></label>
+          <label id="trendModeRow" class="hidden">趋势显示模式<select data-widget="trend_mode"><option value="line">折线</option><option value="step">阶梯线</option><option value="bar">柱状</option></select></label>
+          <div id="trendDetailRows" class="hidden">
+            <label>下方说明文字（可留空）<input data-widget="trend_caption" placeholder="客厅温度变化"></label>
+            <div class="field-grid"><label>横轴时间范围（分钟）<input type="number" min="1" max="10080" data-widget-number="trend_time_range_minutes"></label><label>历史点数<input type="number" min="2" max="240" data-widget-number="trend_point_count"></label><label>采样间隔（秒，0为自动）<input type="number" min="0" max="86400" data-widget-number="trend_sample_interval"></label><label>横轴刻度数<input type="number" min="2" max="10" data-widget-number="trend_x_ticks"></label><label>纵轴刻度数<input type="number" min="2" max="10" data-widget-number="trend_y_ticks"></label><label>坐标文字颜色<input type="color" data-widget="trend_axis_color"></label><label>横轴<select data-widget="trend_show_x_axis" data-widget-type="boolean"><option value="true">显示</option><option value="false">隐藏</option></select></label><label>纵轴<select data-widget="trend_show_y_axis" data-widget-type="boolean"><option value="true">显示</option><option value="false">隐藏</option></select></label><label>时间刻度<select data-widget="trend_time_labels"><option value="fuzzy">模糊范围</option><option value="exact">精确（随当前时间滚动）</option></select></label><label>显示标题<select data-widget="trend_show_title" data-widget-type="boolean"><option value="true">显示</option><option value="false">隐藏</option></select></label><label>显示实时值<select data-widget="trend_show_current" data-widget-type="boolean"><option value="true">显示</option><option value="false">隐藏</option></select></label></div>
+            <small class="field-hint">采样间隔为0时，系统按时间范围和历史点数自动计算；手动填写间隔时，实际覆盖时间约为“间隔 ×（点数−1）”。点数越多曲线越细腻，但生成配置和重绘负担也会增加。</small>
+          </div>
+          <small id="trendModeHint" class="field-hint hidden">HA实体提供当前数值；显示模式和历史采样由设备端趋势图处理。</small>
         </section>
-        <section class="form-section hidden" id="imageSection"><h2>图片裁切</h2>
+        <section class="form-section hidden" id="containerLayoutSection"><h2>容器布局</h2>
+          <label>布局方式<select data-widget="layout_type"><option value="none">绝对定位</option><option value="flex">Flex自动布局</option><option value="grid">Grid网格布局</option></select></label>
+          <label id="flexFlowRow">排列方向<select data-widget="flex_flow"><option value="row">横向</option><option value="row_wrap">横向换行</option><option value="column">纵向</option><option value="column_wrap">纵向换列</option><option value="row_reverse">横向反序</option><option value="column_reverse">纵向反序</option></select></label>
+          <div class="field-grid"><label>主轴对齐<select data-widget="flex_align_main"><option value="start">起点</option><option value="center">居中</option><option value="end">终点</option><option value="space_between">两端分布</option><option value="space_evenly">均匀分布</option></select></label><label>交叉轴对齐<select data-widget="flex_align_cross"><option value="start">起点</option><option value="center">居中</option><option value="end">终点</option></select></label><label>行间距<input type="number" min="0" max="100" data-widget-number="layout_pad_row"></label><label>列间距<input type="number" min="0" max="100" data-widget-number="layout_pad_column"></label></div>
+          <div id="gridSizeRow" class="field-grid hidden"><label>行数<input type="number" min="1" max="12" data-widget-number="grid_rows"></label><label>列数<input type="number" min="1" max="12" data-widget-number="grid_columns"></label></div>
+          <label>启用内容滚动<select data-widget="container_scrollable" data-widget-type="boolean"><option value="false">关闭</option><option value="true">启用</option></select></label>
+          <div id="containerScrollRows" class="field-grid hidden"><label>滚动方向<select data-widget="container_scroll_dir"><option value="VER">仅上下</option><option value="HOR">仅左右</option><option value="ALL">上下和左右</option></select></label><label>滚动条<select data-widget="container_scrollbar"><option value="AUTO">需要时显示</option><option value="ACTIVE">滚动时显示</option><option value="ON">始终显示</option><option value="OFF">隐藏</option></select></label><label>滚动惯性<select data-widget="container_scroll_momentum" data-widget-type="boolean"><option value="true">启用</option><option value="false">关闭</option></select></label><label>边缘回弹<select data-widget="container_scroll_elastic" data-widget-type="boolean"><option value="true">启用</option><option value="false">关闭</option></select></label></div>
+          <small class="field-hint">Flex纵向布局超出容器后可像网页一样上下滑动；横向布局和Grid同样支持对应方向滚动。</small>
+        </section>
+        <section class="form-section hidden" id="gridCellSection"><h2 id="gridCellTitle">Grid单元格</h2><div class="field-grid"><label id="gridRowLabel">行位置<input type="number" min="0" max="11" data-widget-number="grid_row"></label><label id="gridColumnLabel">列位置<input type="number" min="0" max="11" data-widget-number="grid_column"></label><label id="gridRowSpanLabel">跨行<input type="number" min="1" max="12" data-widget-number="grid_row_span"></label><label id="gridColumnSpanLabel">跨列<input type="number" min="1" max="12" data-widget-number="grid_column_span"></label></div></section>
+        <section class="form-section hidden" id="viewLayoutSection"><h2>分页容器</h2><label id="viewItemsRow">标签名称（每行一个）<textarea data-widget="view_items" rows="4"></textarea></label><div id="tileSizeRows" class="field-grid"><label>磁贴行数<input type="number" min="1" max="12" data-widget-number="grid_rows"></label><label>磁贴列数<input type="number" min="1" max="12" data-widget-number="grid_columns"></label></div><label id="tabPreviewRow">画布预览标签<select id="tabPreviewSelect" data-widget-number="view_preview_index"></select></label><div id="tilePreviewRows" class="field-grid"><label>画布预览行<input type="number" min="0" max="11" data-widget-number="view_preview_row"></label><label>画布预览列<input type="number" min="0" max="11" data-widget-number="view_preview_column"></label></div><small class="field-hint">预览设置只影响编辑画布，不影响设备端滑动或标签切换。</small></section>
+        <section class="form-section hidden" id="viewChildSection"><h2>分页归属</h2><label id="tabChildIndexRow">所属标签<select id="tabChildIndexSelect" data-widget-number="view_index"></select></label><small id="tileChildHint" class="field-hint hidden">使用“磁贴归属”的行、列指定所属页面；组件X/Y仍表示它在该磁贴内部的位置。</small></section>
+        <section class="form-section hidden component-specific" id="nativeControlSection"><h2>控件专属配置</h2>
+          <div id="controlRangeRow" class="field-grid hidden"><label>最小值<input type="number" data-widget-number="progress_min"></label><label>最大值<input type="number" data-widget-number="progress_max"></label><label>预览值<input type="number" data-widget-number="progress_value"></label><label>活动颜色<input type="color" data-widget="progress_color"></label></div>
+          <label id="controlCheckedRow" class="hidden">初始状态<select data-widget="control_checked" data-widget-type="boolean"><option value="false">关闭／未选中</option><option value="true">开启／已选中</option></select></label>
+          <label id="controlOptionsRow" class="hidden">选项（每行一个）<textarea data-widget="control_options" rows="5" placeholder="选项一&#10;选项二"></textarea></label>
+          <label id="controlSelectedRow" class="hidden">默认选项序号（从0开始）<input type="number" min="0" max="31" data-widget-number="control_selected"></label>
+          <label id="controlTextRow" class="hidden">控件内容<input data-widget="control_text" placeholder="二维码内容或输入提示"></label>
+          <div id="controlDetailRow" class="field-grid hidden"><label>可见行数<input type="number" min="1" max="8" data-widget-number="control_rows"></label><label>数字位数<input type="number" min="1" max="10" data-widget-number="control_digits"></label><label>小数位<input type="number" min="0" max="9" data-widget-number="control_decimals"></label></div>
+        </section>
+        <section class="form-section hidden component-specific" id="matrixButtonSection"><h2>按钮矩阵 · 逐按钮动作</h2>
+          <small class="field-hint">先在“矩阵内容”中用 | 分列、换行分行，再为每个按钮分别设置HA实体和动作。</small>
+          <div id="matrixButtonEditor" class="matrix-button-editor"></div>
+        </section>
+        <section class="form-section hidden component-specific" id="batterySection"><h2>电池显示</h2>
+          <label>样式<select data-widget="battery_style"><option value="horizontal">横向</option><option value="vertical">竖向</option><option value="ring">圆环</option></select></label>
+          <label>显示内容<select data-widget="battery_display"><option value="icon">仅状态图标</option><option value="percent">百分比与状态图标</option><option value="full">完整诊断信息</option></select></label>
+          <div class="field-grid"><label>低电颜色<input type="color" data-widget="battery_low_color"></label><label>警告颜色<input type="color" data-widget="battery_warning_color"></label></div>
+          <div class="field-grid"><label>充电颜色<input type="color" data-widget="battery_charge_color"></label><label>放电颜色<input type="color" data-widget="battery_discharge_color"></label></div>
+        </section>
+        <section class="form-section hidden component-specific" id="imageSection"><h2>图片显示</h2>
           <label>适配方式<select data-widget="image_fit"><option value="fill">拉伸填充</option><option value="cover">等比裁切</option><option value="contain">完整包含</option></select></label>
           <div class="field-grid"><label>水平焦点<input type="range" min="0" max="100" data-widget-number="image_offset_x"></label><label>垂直焦点<input type="range" min="0" max="100" data-widget-number="image_offset_y"></label></div>
+          <div class="field-grid"><label>图片透明度<input type="range" min="0" max="100" data-widget-number="image_opacity"></label><label>灰度<input type="range" min="0" max="100" data-widget-number="image_grayscale"></label></div>
+          <div class="field-grid"><label>亮度<input type="range" min="0" max="200" data-widget-number="image_brightness"></label><label>模糊<input type="range" min="0" max="20" data-widget-number="image_blur"></label></div>
+          <div class="field-grid"><label>遮罩颜色<input type="color" data-widget="image_tint"></label><label>遮罩强度<input type="range" min="0" max="100" data-widget-number="image_tint_opacity"></label></div>
         </section>
-        <section class="form-section" id="styleSection"><h2>样式</h2>
-          <label id="shapeTypeRow" class="hidden">类型<select data-widget="shape_type"><option value="rectangle">矩形</option><option value="ellipse">椭圆</option><option value="circle">圆形</option><option value="line">线条</option></select></label>
+        <section class="form-section inspector-group inspector-visual" id="styleSection"><h2>文字与图标</h2>
           <div class="field-grid">
             <label id="fontSizeRow">字号<input type="number" min="8" max="96" data-widget-number="font_size"></label>
             <label id="textAlignRow">文字对齐<select data-widget="text_align"><option value="left">左</option><option value="center">中</option><option value="right">右</option></select></label>
+            <label id="textColorRow">基础文字颜色<input type="color" data-widget="text_color"></label>
+            <label id="textOpacityRow">文字透明度<input type="range" min="0" max="100" step="1" data-widget-number="text_opacity"></label>
           </div>
-          <div class="field-grid">
-            <label id="textColorRow">文字颜色<input type="color" data-widget="text_color"></label>
-            <label>填充颜色<input type="color" data-widget="background_color"></label>
-            <label>边框颜色<input type="color" data-widget="border_color"></label>
-            <label>边框宽度<input type="number" min="0" max="24" data-widget-number="border_width"></label>
-            <label>圆角<input type="number" min="0" max="200" data-widget-number="radius"></label>
+          <small id="effectiveFontHint" class="field-hint"></small>
+          <label id="autoFitTextRow">字体适配<select data-widget="auto_fit_text" data-widget-type="boolean"><option value="true">自动缩小防止溢出</option><option value="false">严格使用设置字号</option></select></label>
+          <div class="field-grid" id="textOffsetRow">
+            <label>文字水平偏移<input type="number" min="-800" max="800" data-widget-number="text_offset_x"></label>
+            <label>文字垂直偏移<input type="number" min="-480" max="480" data-widget-number="text_offset_y"></label>
           </div>
-          <label id="clickEffectRow" class="hidden">点击效果<select data-widget="click_effect"><option value="scale">按压缩放</option><option value="darken">按压变暗</option><option value="none">无</option></select></label>
-          <label>动画<select data-widget="animation"><option>无</option><option>渐显</option><option>滚动</option></select></label>
+          <button id="forceCenterBtn" class="button full-width-button" type="button">文字与图标强制居中</button>
+          <div id="shapeIconSection">
+            <div class="asset-actions"><button id="attachShapeIcon" class="button" type="button">插入常用图标</button><button id="removeShapeIcon" class="button" type="button">移除图标</button></div>
+            <small id="shapeIconName" class="field-hint"></small>
+            <div class="field-grid">
+              <label>图标大小<input type="number" min="8" max="192" data-widget-number="icon_size"></label>
+              <label>图标水平位置<input type="number" min="-800" max="800" data-widget-number="icon_offset_x"></label>
+              <label>图标垂直位置<input type="number" min="-480" max="480" data-widget-number="icon_offset_y"></label>
+            </div>
+          </div>
         </section>
-        <section class="form-section" id="actionSection"><h2>触摸操作</h2>
-          <label>HA操作<input data-widget="action" placeholder="input_number.set_value"></label>
-          <label>操作实体<input data-widget="action_entity" placeholder="input_number.people_home_1"></label>
-          <label>操作值<input type="number" data-widget-number="action_value"></label>
+        <section class="form-section inspector-group inspector-visual" id="appearanceSection"><h2>容器外观</h2>
+          <div class="field-grid">
+            <label id="overallOpacityRow">整体透明度<input type="range" min="0" max="100" step="1" data-widget-number="opacity"></label>
+            <label id="fillColorRow">基础背景颜色<input type="color" data-widget="background_color"></label>
+            <label id="backgroundOpacityRow">填充不透明度（0为透明）<input type="range" min="0" max="100" step="1" data-widget-number="background_opacity"></label>
+            <label id="borderColorRow">边框颜色<input type="color" data-widget="border_color"></label>
+            <label id="borderOpacityRow">边框透明度<input type="range" min="0" max="100" step="1" data-widget-number="border_opacity"></label>
+            <label id="borderWidthRow">边框宽度<input type="number" min="0" max="24" data-widget-number="border_width"></label>
+            <label id="radiusRow">圆角<input type="number" min="0" max="200" data-widget-number="radius"></label>
+          </div>
+        </section>
+        <section class="form-section" id="actionSection"><h2>交互与动画</h2>
+          <label id="clickEffectRow" class="hidden">点击效果<select data-widget="click_effect"><option value="scale">按压缩放</option><option value="darken">按压变暗</option><option value="highlight">高亮描边</option><option value="none">无</option></select></label>
+          <label>动画<select data-widget="animation"><option>无</option><option>渐显</option><option>滚动</option></select></label>
+          <label>点击行为<select data-widget="tap_mode"><option value="none">无动作</option><option value="ha">执行HA动作</option><option value="page">切换界面</option><option value="msgbox">打开消息框</option></select></label>
+          <label id="targetPageRow" class="hidden">目标界面<select data-widget="target_page"></select></label>
+          <label id="haActionRow">HA操作<input data-widget="action" placeholder="input_number.set_value"></label>
+          <label id="haEntityRow">操作实体（留空使用绑定实体）<input data-widget="action_entity" placeholder="默认使用上方绑定实体"></label>
+          <label id="haValueRow">操作值<input type="number" data-widget-number="action_value"></label>
         </section>
       </div>
     </aside>
   </main>
 
   <section class="console" id="console">
-    <div class="console-head"><strong>构建输出</strong><span id="taskState">空闲</span><progress id="taskProgress" max="100" value="0"></progress><button id="toggleConsole">收起</button></div>
-    <pre id="logOutput">等待任务...</pre>
+    <div class="console-head">
+      <div class="console-tabs"><button class="active" data-console-tab="task">任务日志</button><button data-console-tab="serial">串口监视</button><button data-console-tab="network">无线监视</button></div>
+      <span id="taskState">空闲</span><progress id="taskProgress" max="100" value="0"></progress>
+      <div id="serialControls" class="serial-controls hidden">
+        <select id="serialBaud" aria-label="波特率"><option>9600</option><option>57600</option><option selected>115200</option><option>230400</option><option>460800</option><option>921600</option></select>
+        <button id="serialStart">开始</button><button id="serialPause">暂停</button><button id="serialClear">清空</button>
+        <select id="serialLevel" aria-label="日志级别"><option value="all">全部</option><option value="error">ERROR</option><option value="warn">WARN</option><option value="info">INFO</option><option value="debug">DEBUG</option></select>
+        <input id="serialSearch" type="search" placeholder="搜索日志" aria-label="搜索日志"><button id="serialIna226" type="button" title="筛选INA226的I2C地址0x40，并在需要时启动串口监视">检查INA226</button><button id="serialCopy" type="button">复制日志</button><button id="serialSave">保存</button>
+      </div>
+      <div id="networkControls" class="serial-controls hidden">
+        <input id="networkTarget" list="otaDevices" aria-label="无线设备地址" placeholder="设备IP或名称.local"><button id="networkStart" type="button">开始</button><button id="networkPause" type="button">暂停</button><button id="networkClear" type="button">清空</button>
+        <select id="networkLevel" aria-label="日志级别"><option value="all">全部</option><option value="error">ERROR</option><option value="warn">WARN</option><option value="info">INFO</option><option value="debug">DEBUG</option></select>
+        <input id="networkSearch" type="search" placeholder="搜索日志" aria-label="搜索日志"><button id="networkIna226" type="button" title="筛选INA226的I2C地址0x40，并开始无线日志监视">检查INA226</button><button id="networkCopy" type="button">复制日志</button>
+      </div>
+      <button id="toggleConsole">收起</button>
+    </div>
+    <pre id="logOutput">等待任务...</pre><pre id="serialOutput" class="hidden">串口监视未启动</pre><pre id="networkOutput" class="hidden">无线监视未启动</pre>
   </section>
+
+  <dialog id="iconPicker" class="icon-picker">
+    <header><strong>选择图标</strong><button type="button" onclick="this.closest('dialog').close()" aria-label="关闭">×</button></header>
+    <nav id="iconCategories" class="icon-categories"></nav>
+    <div id="iconGrid" class="icon-grid"></div>
+  </dialog>
+  <dialog id="componentPicker" class="icon-picker component-picker">
+    <header><strong id="componentPickerTitle">选择组件</strong><button type="button" onclick="this.closest('dialog').close()" aria-label="关闭">×</button></header>
+    <nav id="componentCategories" class="icon-categories"></nav>
+    <div id="componentGrid" class="icon-grid"></div>
+  </dialog>
 
   <div id="toast" class="toast" role="status"></div>
   <script src="/app.js"></script>
