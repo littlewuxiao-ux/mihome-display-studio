@@ -152,7 +152,9 @@ class LvglCompiler:
             body.setdefault("widgets", []).append({"obj": dict(id=f"{w.id}_bevel_{side}", align=align,
                 width="100%" if horizontal else max(2, round(w.width / 4)), height=max(2, round(w.height / 4)) if horizontal else "100%",
                 bg_color=0 if side in {"top", "left"} else 0xFFFFFF, bg_grad_color=0 if side in {"top", "left"} else 0xFFFFFF,
-                bg_opa=first, bg_grad_opa=last, bg_grad_dir=direction, radius=0, border_width=0, pad_all=0,
+                bg_opa=first, bg_grad_opa=last, bg_grad_dir=direction,
+                radius=200 if w.shape_type in {"ellipse", "circle"} else w.radius,
+                border_width=0, pad_all=0,
                 hidden=v.get("depth") != "inset", clickable=False, scrollable=False)})
 
     def action(self, w, value=None):
@@ -266,7 +268,7 @@ class LvglCompiler:
                                            text_font=f"mdi_font_{min(24, max(12, w.height - 4))}", clickable=False)})
         if children: body["widgets"] = children
         if w.tap_mode == "page":
-            body["on_click"] = [{"lvgl.page.show": dict(id=w.target_page, animation=self.p.page_animation, time="0ms" if self.p.page_animation == "NONE" else "300ms")}]
+            body["on_click"] = [{"lvgl.page.show": dict(id=w.target_page, animation="NONE", time="0ms")}]
         elif w.tap_mode == "ha" or w.action.startswith("device."):
             selection_action = w.kind in {"dropdown", "roller"} and w.action.endswith(".select_option")
             if w.kind != "slider" and not selection_action and (actions := self.action(w)):

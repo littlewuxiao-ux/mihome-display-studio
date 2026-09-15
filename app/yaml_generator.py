@@ -313,10 +313,9 @@ class YamlGenerator:
             result += ["            pressed:", "              bg_opa: 70%"]
         if initial_variant and initial_variant.get("depth") in {"raised", "inset"} and w.click_effect not in {"scale", "darken"}:
             result += ["            pressed:", "              shadow_width: 2", "              shadow_opa: 80%"]
-        animation = page_animation if page_animation in {"FADE_IN", "FADE_OUT", "MOVE_LEFT", "MOVE_RIGHT", "MOVE_TOP", "MOVE_BOTTOM"} else "FADE_IN"
         if w.kind == "page_button" or navigates:
             result += ["            on_click:", "              then:", "                - lvgl.page.show:", f"                    id: {w.target_page}",
-                       f"                    animation: {animation}", "                    time: 300ms"]
+                       "                    animation: NONE", "                    time: 0ms"]
         elif w.action == "device.restart":
             result += ["            on_click:", "              then:", "                - button.press: restart_button"]
         elif w.action == "device.safe_mode":
