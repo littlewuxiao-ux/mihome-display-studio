@@ -183,7 +183,8 @@ class LvglCompiler:
         if w.binding:
             store = self.textual if w.binding_type == "state" and w.kind not in {"progress_circle", "progress_bar", "slider", "battery", "spinbox"} else self.numeric
             store.setdefault((w.binding, w.binding_attribute), []).append(w)
-        component = "button" if w.kind in {"button", "page_button"} else "obj"
+        interactive_shape = w.kind in {"shape", "icon", "image"} and w.tap_mode == "ha" and bool(w.action)
+        component = "button" if w.kind in {"button", "page_button"} or interactive_shape else "obj"
         body = dict(id=w.id + "_root", x=w.x, y=w.y, width=w.width, height=w.height, pad_all=0,
                     radius=200 if w.shape_type in {"ellipse", "circle"} else w.radius,
                     bg_color=rgb(w.background_color), bg_opa=opa(w.background_opacity), opa=opa(w.opacity),
