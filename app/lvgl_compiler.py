@@ -295,11 +295,10 @@ class LvglCompiler:
             return {"lambda": "\n".join([
                 f"if (std::isfinite({expression})) {{",
                 f"  static lv_point_precise_t points[{count}];",
-                "  static uint16_t used = 0;",
-                "  if (used < %d) points[used++] = {}; else { for (uint16_t i = 1; i < %d; i++) points[i - 1] = points[i]; }" % (count, count),
+                f"  if (id({w.id}_history_count) < {count}) id({w.id}_history)[id({w.id}_history_count)++] = {expression}; else {{ for (uint16_t i = 1; i < {count}; i++) id({w.id}_history)[i - 1] = id({w.id}_history)[i]; id({w.id}_history)[{count - 1}] = {expression}; }}",
+                f"  const uint16_t used = id({w.id}_history_count);",
                 f"  const float ratio = std::clamp(({expression} - {lo}f) / {max(0.0001, hi - lo)}f, 0.0f, 1.0f);",
-                f"  points[used - 1].x = (used > 1) ? (used - 1) * {plot_w} / ({count} - 1) : 0;",
-                f"  points[used - 1].y = {plot_h} - (int)lroundf(ratio * {plot_h});",
+                f"  for (uint16_t i = 0; i < used; i++) {{ points[i].x = (used > 1) ? i * {plot_w} / ({count} - 1) : 0; points[i].y = {plot_h} - (int)lroundf(std::clamp((id({w.id}_history)[i] - {lo}f) / {max(0.0001, hi - lo)}f, 0.0f, 1.0f) * {plot_h}); }}",
                 f"  lv_line_set_points(id({w.id}_trend)->obj, points, used);",
                 f"  lv_label_set_text_fmt(id({w.id}_label), {cpp((w.text.strip() + ' ' if w.show_fixed_title and w.text.strip() else '') + '%.{}f{}'.format(w.value_decimals, w.value_suffix.replace('%','%%')))}, {expression});",
                 "}"
@@ -392,14 +391,24 @@ class LvglCompiler:
             pages.append(node)
         result = {"lvgl": dict(displays=["main_display"], touchscreens=["touch_panel"], default_font=f"ui_font_{min(font_size(w) for w in self.p.widgets) if self.p.widgets else 28}", buffer_size="25%", pages=pages)}
         sensors, texts = [], []
+        for w in self.p.widgets:
+            if w.kind == "trend_chart" and w.binding:
+                count = max(2, min(int(w.trend_point_count or 120), 240))
+                result.setdefault("globals", []).extend([
+                    dict(id=f"{w.id}_history", type=f"std::array<float, {count}>", restore_value=True, initial_value=f"std::array<float, {count}>{{}}"),
+                    dict(id=f"{w.id}_history_count", type="uint16_t", restore_value=True, initial_value="0"),
+                ])
         for i, ((binding, attr), ws) in enumerate(self.numeric.items()):
             if binding.startswith("device:"): continue
             node = dict(platform="homeassistant", id=f"ha_value_{i}", entity_id=binding, internal=True, on_value=[self.numeric_update(w) for w in ws])
             if attr: node["attribute"] = attr
             sensors.append(node)
-            trend_ws = [w for w in ws if w.kind == "trend_chart" and int(w.trend_sample_interval or 0) > 0]
+            trend_ws = [w for w in ws if w.kind == "trend_chart"]
             for w in trend_ws:
-                result.setdefault("interval", []).append({"interval": f"{max(1, int(w.trend_sample_interval))}s",
+                sample = int(w.trend_sample_interval or 0)
+                if sample <= 0:
+                    sample = max(1, round(int(w.trend_time_range_minutes or 120) * 60 / max(1, int(w.trend_point_count or 120) - 1)))
+                result.setdefault("interval", []).append({"interval": f"{sample}s",
                     "then": [self.numeric_update(w, f"id(ha_value_{i}).state")]})
         for i, ((binding, attr), ws) in enumerate(self.textual.items()):
             if binding.startswith("device:"): continue
