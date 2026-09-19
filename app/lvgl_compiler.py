@@ -281,6 +281,29 @@ class LvglCompiler:
         return {component: body}
 
     def numeric_update(self, w, expression="x"):
+        if w.kind == "trend_chart":
+            # Keep a rolling sample buffer on the device and redraw the line
+            # whenever a new sample arrives.  The buffer is deliberately
+            # local to this chart callback so multiple charts do not share
+            # history.  Sampling is driven by the interval block emitted in
+            # sections(), while the first HA value paints immediately.
+            count = max(2, min(int(w.trend_point_count or 120), 240))
+            plot_w = max(1, w.width - 12)
+            plot_h = max(1, w.height - 40)
+            lo = float(w.progress_min)
+            hi = float(w.progress_max)
+            return {"lambda": "\n".join([
+                f"if (std::isfinite({expression})) {{",
+                f"  static lv_point_precise_t points[{count}];",
+                "  static uint16_t used = 0;",
+                "  if (used < %d) points[used++] = {}; else { for (uint16_t i = 1; i < %d; i++) points[i - 1] = points[i]; }" % (count, count),
+                f"  const float ratio = std::clamp(({expression} - {lo}f) / {max(0.0001, hi - lo)}f, 0.0f, 1.0f);",
+                f"  points[used - 1].x = (used > 1) ? (used - 1) * {plot_w} / ({count} - 1) : 0;",
+                f"  points[used - 1].y = {plot_h} - (int)lroundf(ratio * {plot_h});",
+                f"  lv_line_set_points(id({w.id}_trend)->obj, points, used);",
+                f"  lv_label_set_text_fmt(id({w.id}_label), {cpp((w.text.strip() + ' ' if w.show_fixed_title and w.text.strip() else '') + '%.{}f{}'.format(w.value_decimals, w.value_suffix.replace('%','%%')))}, {expression});",
+                "}"
+            ])}
         if w.kind == "spinbox":
             return {"if": {"condition": {"lambda": f"return std::isfinite({expression});"},
                            "then": [{"lvgl.spinbox.update": {"id": w.id + "_root", "value": Lambda(f"return {expression};")}}]}}
@@ -374,6 +397,10 @@ class LvglCompiler:
             node = dict(platform="homeassistant", id=f"ha_value_{i}", entity_id=binding, internal=True, on_value=[self.numeric_update(w) for w in ws])
             if attr: node["attribute"] = attr
             sensors.append(node)
+            trend_ws = [w for w in ws if w.kind == "trend_chart" and int(w.trend_sample_interval or 0) > 0]
+            for w in trend_ws:
+                result.setdefault("interval", []).append({"interval": f"{max(1, int(w.trend_sample_interval))}s",
+                    "then": [self.numeric_update(w, f"id(ha_value_{i}).state")]})
         for i, ((binding, attr), ws) in enumerate(self.textual.items()):
             if binding.startswith("device:"): continue
             node = dict(platform="homeassistant", id=f"ha_text_{i}", entity_id=binding, internal=True, on_value=[self.text_update(w) for w in ws])
