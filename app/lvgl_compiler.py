@@ -43,6 +43,19 @@ def opa(value):
     return f"{max(0, min(100, int(value)))}%"
 
 
+def trend_geometry(w):
+    """Return the plot rectangle inside a trend widget."""
+    plot_x = 38 if w.trend_show_y_axis else 8
+    plot_y = 30 if (w.trend_show_title or w.trend_show_current) else 6
+    plot_bottom = 22 if w.trend_show_x_axis else 6
+    return (
+        plot_x,
+        plot_y,
+        max(20, w.width - plot_x - 8),
+        max(20, w.height - plot_y - plot_bottom),
+    )
+
+
 def variants(w):
     if not w.state_style_enabled:
         return []
@@ -280,29 +293,64 @@ class LvglCompiler:
             body["pressed"] = {"transform_width": -4, "transform_height": -4} if w.click_effect == "scale" else {"opa": "70%"} if w.click_effect == "darken" else {"outline_color": rgb(w.progress_color), "outline_width": 2}
         return {component: body}
 
-    def numeric_update(self, w, expression="x"):
+    def numeric_update(self, w, expression="x", append_trend_sample=True):
         if w.kind == "trend_chart":
-            # Keep a rolling sample buffer on the device and redraw the line
-            # whenever a new sample arrives.  The buffer is deliberately
-            # local to this chart callback so multiple charts do not share
-            # history.  Sampling is driven by the interval block emitted in
-            # sections(), while the first HA value paints immediately.
             count = max(2, min(int(w.trend_point_count or 120), 240))
-            plot_w = max(1, w.width - 12)
-            plot_h = max(1, w.height - 40)
+            _, _, plot_w, plot_h = trend_geometry(w)
             lo = float(w.progress_min)
             hi = float(w.progress_max)
-            return {"lambda": "\n".join([
-                f"if (std::isfinite({expression})) {{",
-                f"  static lv_point_precise_t points[{count}];",
-                f"  if (id({w.id}_history_count) < {count}) id({w.id}_history)[id({w.id}_history_count)++] = {expression}; else {{ for (uint16_t i = 1; i < {count}; i++) id({w.id}_history)[i - 1] = id({w.id}_history)[i]; id({w.id}_history)[{count - 1}] = {expression}; }}",
-                f"  const uint16_t used = id({w.id}_history_count);",
-                f"  const float ratio = std::clamp(({expression} - {lo}f) / {max(0.0001, hi - lo)}f, 0.0f, 1.0f);",
-                f"  for (uint16_t i = 0; i < used; i++) {{ points[i].x = (used > 1) ? i * {plot_w} / ({count} - 1) : 0; points[i].y = {plot_h} - (int)lroundf(std::clamp((id({w.id}_history)[i] - {lo}f) / {max(0.0001, hi - lo)}f, 0.0f, 1.0f) * {plot_h}); }}",
-                f"  lv_line_set_points(id({w.id}_trend)->obj, points, used);",
-                f"  lv_label_set_text_fmt(id({w.id}_label), {cpp((w.text.strip() + ' ' if w.show_fixed_title and w.text.strip() else '') + '%.{}f{}'.format(w.value_decimals, w.value_suffix.replace('%','%%')))}, {expression});",
-                "}"
-            ])}
+            capacity = count if w.trend_mode == "line" else count * 2 - 1 if w.trend_mode == "step" else count * 3
+            lines = [f"static lv_point_precise_t points[{capacity}];"]
+            if append_trend_sample:
+                lines += [
+                    f"if (std::isfinite({expression})) {{",
+                    f"  if (id({w.id}_history_count) < {count}) id({w.id}_history)[id({w.id}_history_count)++] = {expression};",
+                    f"  else {{ for (uint16_t i = 1; i < {count}; i++) id({w.id}_history)[i - 1] = id({w.id}_history)[i]; id({w.id}_history)[{count - 1}] = {expression}; }}",
+                    "}",
+                ]
+            lines += [
+                f"const uint16_t used = std::min<uint16_t>(id({w.id}_history_count), {count});",
+                "uint16_t point_count = 0;",
+            ]
+            if w.trend_mode == "step":
+                lines += [
+                    "for (uint16_t i = 0; i < used; i++) {",
+                    f"  const int x_pos = {plot_w} - (used - 1 - i) * {plot_w} / ({count} - 1);",
+                    f"  const int y_pos = {plot_h} - (int)lroundf(std::clamp((id({w.id}_history)[i] - {lo}f) / {max(0.0001, hi - lo)}f, 0.0f, 1.0f) * {plot_h});",
+                    "  if (i > 0) { points[point_count].x = x_pos; points[point_count].y = points[point_count - 1].y; point_count++; }",
+                    "  points[point_count].x = x_pos; points[point_count].y = y_pos; point_count++;",
+                    "}",
+                ]
+            elif w.trend_mode == "bar":
+                lines += [
+                    "for (uint16_t i = 0; i < used; i++) {",
+                    f"  const int x_pos = {plot_w} - (used - 1 - i) * {plot_w} / ({count} - 1);",
+                    f"  const int y_pos = {plot_h} - (int)lroundf(std::clamp((id({w.id}_history)[i] - {lo}f) / {max(0.0001, hi - lo)}f, 0.0f, 1.0f) * {plot_h});",
+                    f"  points[point_count].x = x_pos; points[point_count].y = {plot_h}; point_count++;",
+                    "  points[point_count].x = x_pos; points[point_count].y = y_pos; point_count++;",
+                    f"  points[point_count].x = x_pos; points[point_count].y = {plot_h}; point_count++;",
+                    "}",
+                ]
+            else:
+                lines += [
+                    "for (uint16_t i = 0; i < used; i++) {",
+                    f"  points[point_count].x = {plot_w} - (used - 1 - i) * {plot_w} / ({count} - 1);",
+                    f"  points[point_count].y = {plot_h} - (int)lroundf(std::clamp((id({w.id}_history)[i] - {lo}f) / {max(0.0001, hi - lo)}f, 0.0f, 1.0f) * {plot_h});",
+                    "  point_count++;",
+                    "}",
+                ]
+            lines.append(f"lv_line_set_points(id({w.id}_trend)->obj, points, point_count);")
+            title = w.text.strip() + " " if w.trend_show_title and w.text.strip() else ""
+            if w.trend_show_current:
+                fmt = title.replace("%", "%%") + f"%.{w.value_decimals}f" + w.value_suffix.replace("%", "%%")
+                lines += [
+                    f"if (std::isfinite({expression})) lv_label_set_text_fmt(id({w.id}_label), {cpp(fmt)}, {expression});",
+                    f"else lv_label_set_text(id({w.id}_label), {cpp(title + '--' + w.value_suffix)});",
+                ]
+            else:
+                lines.append(f"lv_label_set_text(id({w.id}_label), {cpp(title.rstrip())});")
+            return {"lambda": "\n".join(lines)}
+
         if w.kind == "spinbox":
             return {"if": {"condition": {"lambda": f"return std::isfinite({expression});"},
                            "then": [{"lvgl.spinbox.update": {"id": w.id + "_root", "value": Lambda(f"return {expression};")}}]}}
@@ -330,6 +378,27 @@ class LvglCompiler:
             if w.battery_display == "full" and self.p.battery_monitor:
                 statements += [f"if (std::isfinite({expression})) lv_label_set_text_fmt(id({w.id}_label), \"%.0f%% %.2fV %.2fA %.2fW %.1fh\", {expression}, id(ina_battery_voltage).state, {current}, id(ina_battery_power).state, id(battery_remaining).state);"]
         return {"lambda": "\n".join(statements) or "// No numeric display"}
+
+    def trend_time_update(self, w):
+        ticks = max(2, min(int(w.trend_x_ticks or 5), 10))
+        total_seconds = int(w.trend_time_range_minutes or 120) * 60
+        code = ["auto now = id(local_clock).now();", "if (now.is_valid()) {"]
+        for tick in range(ticks - 1):
+            seconds_ago = round(total_seconds * (ticks - 1 - tick) / max(1, ticks - 1))
+            code += [
+                f"  time_t stamp_{tick} = now.timestamp - {seconds_ago};",
+                f"  struct tm value_time_{tick};",
+                f"  localtime_r(&stamp_{tick}, &value_time_{tick});",
+            ]
+            if w.trend_time_range_minutes < 180:
+                value, boundary = f"value_time_{tick}.tm_min", f"value_time_{tick}.tm_min == 0"
+            elif w.trend_time_range_minutes < 2880:
+                value, boundary = f"value_time_{tick}.tm_hour", f"value_time_{tick}.tm_hour == 0"
+            else:
+                value, boundary = f"value_time_{tick}.tm_mday", f"value_time_{tick}.tm_mday == 1"
+            code.append(f"  lv_label_set_text_fmt(id({w.id}_x_label_{tick}), \"%s%02d\", {boundary} ? \"|\" : \"\", {value});")
+        code.append("}")
+        return {"lambda": "\n".join(code)}
 
     def text_update(self, w):
         vs = variants(w)
@@ -400,7 +469,8 @@ class LvglCompiler:
                 ])
         for i, ((binding, attr), ws) in enumerate(self.numeric.items()):
             if binding.startswith("device:"): continue
-            node = dict(platform="homeassistant", id=f"ha_value_{i}", entity_id=binding, internal=True, on_value=[self.numeric_update(w) for w in ws])
+            node = dict(platform="homeassistant", id=f"ha_value_{i}", entity_id=binding, internal=True,
+                        on_value=[self.numeric_update(w, append_trend_sample=False) if w.kind == "trend_chart" else self.numeric_update(w) for w in ws])
             if attr: node["attribute"] = attr
             sensors.append(node)
             trend_ws = [w for w in ws if w.kind == "trend_chart"]
@@ -408,8 +478,12 @@ class LvglCompiler:
                 sample = int(w.trend_sample_interval or 0)
                 if sample <= 0:
                     sample = max(1, round(int(w.trend_time_range_minutes or 120) * 60 / max(1, int(w.trend_point_count or 120) - 1)))
-                result.setdefault("interval", []).append({"interval": f"{sample}s",
+                result.setdefault("interval", []).append({"interval": f"{sample}s", "startup_delay": "10s",
                     "then": [self.numeric_update(w, f"id(ha_value_{i}).state")]})
+                if w.trend_time_labels == "exact" and w.trend_show_x_axis:
+                    result["time"] = [{"platform": "sntp", "id": "local_clock", "timezone": "Asia/Shanghai"}]
+                    result.setdefault("interval", []).append({"interval": "60s", "startup_delay": "5s",
+                        "then": [self.trend_time_update(w)]})
         for i, ((binding, attr), ws) in enumerate(self.textual.items()):
             if binding.startswith("device:"): continue
             node = dict(platform="homeassistant", id=f"ha_text_{i}", entity_id=binding, internal=True, on_value=[self.text_update(w) for w in ws])

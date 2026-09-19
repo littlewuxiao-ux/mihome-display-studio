@@ -6,7 +6,7 @@ import math
 import shutil
 
 from .models import ProjectModel, WidgetModel
-from .lvgl_compiler import LvglCompiler, dump, font_size, glyphs as project_glyphs, icon_specs
+from .lvgl_compiler import LvglCompiler, dump, font_size, glyphs as project_glyphs, icon_specs, trend_geometry
 
 
 def q(value: str) -> str:
@@ -93,7 +93,13 @@ class YamlGenerator:
 
     def _render(self, p: ProjectModel, font_file: str, assets: dict[str, tuple[str, bool]]) -> str:
         glyphs = project_glyphs(p)
-        font_sizes = sorted({font_size(w) for w in p.widgets} | {w.font_size for w in p.widgets} or {28})
+        font_sizes = sorted(
+            {font_size(w) for w in p.widgets}
+            | {w.font_size for w in p.widgets}
+            | {w.trend_header_font_size for w in p.widgets if w.kind == "trend_chart"}
+            | {min(w.font_size, 16) for w in p.widgets if w.kind == "trend_chart"}
+            or {28}
+        )
         lines = [
             "# 由米家中枢屏幕工作台生成，请勿在工具外直接修改。",
             "esphome:", f"  name: {p.device_name}", f"  friendly_name: {q(p.name)}",
@@ -211,20 +217,17 @@ class YamlGenerator:
             # sensor subscription. Draw the complete chart frame here; only
             # the trend line points are replaced at runtime.
             points = []
-            count = max(2, min(int(w.trend_point_count or 120), 120))
-            chart_x = 38 if w.trend_show_y_axis else 8
-            chart_top = 30 if (w.trend_show_title or w.trend_show_current) else 6
-            chart_bottom = 22 if w.trend_show_x_axis else 6
-            chart_w = max(20, w.width - chart_x - 8)
-            chart_h = max(20, w.height - chart_top - chart_bottom)
-            for index in range(count):
-                px = round(index * chart_w / max(1, count - 1)); py = chart_h
+            count = max(2, min(int(w.trend_point_count or 120), 240))
+            point_count = count if w.trend_mode == "line" else count * 2 - 1 if w.trend_mode == "step" else count * 3
+            chart_x, chart_top, chart_w, chart_h = trend_geometry(w)
+            for index in range(point_count):
+                px = round(min(index, count - 1) * chart_w / max(1, count - 1)); py = chart_h
                 points += [f"                    - x: {px}", f"                      y: {py}"]
             result = ["        - obj:", *common, f"            bg_color: {color(w.background_color)}", f"            bg_opa: {max(0, min(100, int(w.background_opacity)))}%", "            widgets:"]
             if w.trend_show_y_axis:
                 for tick in range(max(2, min(int(w.trend_y_ticks or 5), 10))):
                     y = round(chart_top + chart_h * tick / max(1, int(w.trend_y_ticks or 5) - 1))
-                    result += ["              - line:", f"                  id: {w.id}_y_grid_{tick}", "                  points:", f"                    - {chart_x}, {y}", f"                    - {chart_x + chart_w}, {y}", f"                  line_color: {color(w.trend_axis_color)}", "                  line_width: 1"]
+                    result += ["              - line:", f"                  id: {w.id}_y_grid_{tick}", "                  points:", f"                    - {chart_x}, {y}", f"                    - {chart_x + chart_w}, {y}", "                  line_color: 0xAEB7C2", "                  line_opa: 30%", "                  line_width: 1", "                  line_dash_width: 4", "                  line_dash_gap: 4"]
                     value = float(w.progress_max) - (float(w.progress_max) - float(w.progress_min)) * tick / max(1, int(w.trend_y_ticks or 5) - 1)
                     decimals = max(0, min(3, int(w.value_decimals or 0)))
                     value_text = f"{value:.{decimals}f}"
@@ -232,24 +235,21 @@ class YamlGenerator:
             if w.trend_show_x_axis:
                 result += ["              - line:", f"                  id: {w.id}_x_axis", "                  points:", f"                    - {chart_x}, {chart_top + chart_h}", f"                    - {chart_x + chart_w}, {chart_top + chart_h}", f"                  line_color: {color(w.trend_axis_color)}", "                  line_width: 1"]
                 ticks = max(2, min(int(w.trend_x_ticks or 5), 10))
-                for tick in range(ticks):
+                for tick in range(ticks - 1):
                     x = round(chart_x + chart_w * tick / max(1, ticks - 1))
                     minutes = int(w.trend_time_range_minutes or 120) * (ticks - 1 - tick) / max(1, ticks - 1)
-                    label = f"-{round(minutes)}m" if minutes < 180 else f"-{round(minutes / 60)}h"
+                    label = "--" if w.trend_time_labels == "exact" else f"-{round(minutes)}m" if minutes < 180 else f"-{round(minutes / 60)}h"
                     result += ["              - label:", f"                  id: {w.id}_x_label_{tick}", f"                  x: {x - 12}", f"                  y: {chart_top + chart_h + 3}", f"                  text: {q(label)}", f"                  text_color: {color(w.trend_axis_color)}", f"                  text_font: ui_font_{min(w.font_size, 16)}"]
-            result += ["              - line:", f"                  id: {w.id}_trend", "                  points:", *points,
+            result += ["              - line:", f"                  id: {w.id}_trend", f"                  x: {chart_x}", f"                  y: {chart_top}", "                  points:", *points,
                        f"                  line_color: {color(w.progress_color)}", "                  line_width: 3"]
-            label_lines = self._label_lines(w)
-            # Keep the title/current value above the plot and centered.  The
-            # y-axis maximum grid line starts below this header.
-            for index, line in enumerate(label_lines):
-                if line.strip() == f"id: {w.id}_label":
-                    for offset in range(index + 1, min(index + 8, len(label_lines))):
-                        if " y: " in label_lines[offset]:
-                            label_lines[offset] = f"{label_lines[offset].split(' y: ')[0]} y: 2"
-                            break
-                    break
-            result += label_lines
+            title = w.text.strip() if w.trend_show_title else ""
+            initial = title
+            if w.trend_show_current:
+                initial = (title + " " if title else "") + "--" + w.value_suffix
+            result += ["              - label:", f"                  id: {w.id}_label", "                  align: TOP_MID",
+                       "                  x: 0", "                  y: 2", f"                  text: {q(initial)}",
+                       f"                  text_color: {color(w.text_color)}", f"                  text_font: ui_font_{w.trend_header_font_size}",
+                       "                  width: 100%", "                  text_align: CENTER", "                  long_mode: CLIP"]
             return result
         if w.kind in {"progress_circle", "progress_bar"}:
             component = "arc" if w.kind == "progress_circle" else "bar"

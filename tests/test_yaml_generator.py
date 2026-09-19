@@ -291,17 +291,22 @@ class YamlGeneratorTests(unittest.TestCase):
 
     def test_generates_sensor_trend_chart(self) -> None:
         project = self.make_project()
-        project.widgets.append(WidgetModel(id="temperature_trend", kind="trend_chart", text="温度", binding="sensor.temperature", progress_min=-10, progress_max=50, value_suffix="°C", width=320, height=180, trend_time_labels="exact"))
+        project.widgets.append(WidgetModel(id="temperature_trend", kind="trend_chart", text="温度", binding="sensor.temperature", progress_min=-10, progress_max=50, value_suffix="°C", width=320, height=180, trend_time_labels="exact", trend_sample_interval=0))
         with TemporaryDirectory() as directory:
             text = YamlGenerator().generate(project, Path(directory) / "panel.yaml")
         self.assertIn("type: std::array<float, 120>", text)
-        self.assertIn("id: temperature_trend_samples", text)
-        self.assertIn("- lvgl.line.update:", text)
+        self.assertIn("id: temperature_trend_history", text)
+        self.assertIn("restore_value: true", text)
         self.assertIn("id: temperature_trend_trend", text)
-        self.assertIn("for (size_t i = 0; i < 119; i++)", text)
-        self.assertIn("interval: 60s", text)
-        self.assertIn("id: temperature_trend_x_tick_1", text)
-        self.assertIn("localtime_r(&stamp, &value_time);", text)
+        self.assertIn("interval: 61s", text)
+        self.assertIn("startup_delay: 10s", text)
+        self.assertIn("id: temperature_trend_x_label_1", text)
+        self.assertIn("localtime_r(&stamp_1, &value_time_1);", text)
+        self.assertIn("align: TOP_MID", text)
+        self.assertIn("x: 38", text)
+        self.assertIn("y: 30", text)
+        sensor_section = text.split("sensor:", 1)[1]
+        self.assertNotIn("temperature_trend_history_count)++", sensor_section)
 
     def test_generates_button_matrix_and_lightweight_table(self) -> None:
         project = self.make_project()
@@ -566,10 +571,21 @@ class YamlGeneratorTests(unittest.TestCase):
             text = YamlGenerator().generate(project, Path(directory) / "panel.yaml")
         self.assertEqual(text.count("id: trend_y_grid_"), 5)
         self.assertIn("line_dash_width: 4", text)
-        self.assertIn('"%s%02d"', text)
-        self.assertIn("line_color: 0xAEB7C2", text)
-        self.assertIn("text_color: 0x123456", text)
+        self.assertIn("%s%02d", text)
+        self.assertIn("line_color: 11450306", text)
+        self.assertIn("text_color: 1193046", text)
         self.assertNotIn("现在 (", text)
+
+    def test_trend_chart_interval_appends_and_ha_update_only_refreshes(self) -> None:
+        project = self.make_project()
+        project.widgets = [WidgetModel(id="trend", kind="trend_chart", text="当前温度", binding="sensor.temperature", trend_sample_interval=10)]
+        with TemporaryDirectory() as directory:
+            text = YamlGenerator().generate(project, Path(directory) / "panel.yaml")
+        interval_section, sensor_section = text.split("sensor:", 1)
+        self.assertIn("interval: 10s", interval_section)
+        self.assertIn("trend_history_count)++", interval_section)
+        self.assertNotIn("trend_history_count)++", sensor_section)
+        self.assertIn("lv_line_set_points(id(trend_trend)->obj", sensor_section)
 
     def test_buttonmatrix_buttons_have_independent_ha_actions(self) -> None:
         project = self.make_project()
@@ -599,8 +615,8 @@ class YamlGeneratorTests(unittest.TestCase):
         project.widgets = [WidgetModel(id="trend", kind="trend_chart", binding="sensor.temperature", progress_min=20, progress_max=40)]
         with TemporaryDirectory() as directory:
             text = YamlGenerator().generate(project, Path(directory) / "panel.yaml")
-        self.assertIn("(v - 20.0f) / 20.0f", text)
-        self.assertNotIn("(v - 20f) / 20f", text)
+        self.assertIn("(id(trend_history)[i] - 20.0f) / 20.0f", text)
+        self.assertNotIn("(id(trend_history)[i] - 20f) / 20f", text)
 
 
 
