@@ -239,7 +239,17 @@ class YamlGenerator:
                     result += ["              - label:", f"                  id: {w.id}_x_label_{tick}", f"                  x: {x - 12}", f"                  y: {chart_top + chart_h + 3}", f"                  text: {q(label)}", f"                  text_color: {color(w.trend_axis_color)}", f"                  text_font: ui_font_{min(w.font_size, 16)}"]
             result += ["              - line:", f"                  id: {w.id}_trend", "                  points:", *points,
                        f"                  line_color: {color(w.progress_color)}", "                  line_width: 3"]
-            result += self._label_lines(w)
+            label_lines = self._label_lines(w)
+            # Keep the title/current value above the plot and centered.  The
+            # y-axis maximum grid line starts below this header.
+            for index, line in enumerate(label_lines):
+                if line.strip() == f"id: {w.id}_label":
+                    for offset in range(index + 1, min(index + 8, len(label_lines))):
+                        if " y: " in label_lines[offset]:
+                            label_lines[offset] = f"{label_lines[offset].split(' y: ')[0]} y: 2"
+                            break
+                    break
+            result += label_lines
             return result
         if w.kind in {"progress_circle", "progress_bar"}:
             component = "arc" if w.kind == "progress_circle" else "bar"
