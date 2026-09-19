@@ -207,17 +207,36 @@ class YamlGenerator:
         common = [f"            id: {w.id}_root", f"            x: {w.x}", f"            y: {w.y}",
                   f"            width: {w.width}", f"            height: {w.height}", f"            radius: {w.radius}", "            pad_all: 0"]
         if w.kind == "trend_chart":
-            # Keep the trend card independent from ordinary buttons.  The
-            # device receives the numeric entity through the normal sensor
-            # subscription; the line object is a stable drawable that can be
-            # updated without changing the card layout.
+            # The device receives the numeric entity through the normal
+            # sensor subscription. Draw the complete chart frame here; only
+            # the trend line points are replaced at runtime.
             points = []
             count = max(2, min(int(w.trend_point_count or 120), 120))
+            chart_x = 38 if w.trend_show_y_axis else 8
+            chart_top = 30 if (w.trend_show_title or w.trend_show_current) else 6
+            chart_bottom = 22 if w.trend_show_x_axis else 6
+            chart_w = max(20, w.width - chart_x - 8)
+            chart_h = max(20, w.height - chart_top - chart_bottom)
             for index in range(count):
-                ratio = index / max(1, count - 1)
-                px = round(ratio * max(1, w.width - 12)); py = round((1 - (0.5 + 0.35 * math.sin(ratio * math.pi * 4))) * max(1, w.height - 40))
-                points += ["                    - x: %d" % px, "                      y: %d" % py]
+                px = round(index * chart_w / max(1, count - 1)); py = chart_h
+                points += [f"                    - x: {px}", f"                      y: {py}"]
             result = ["        - obj:", *common, f"            bg_color: {color(w.background_color)}", f"            bg_opa: {max(0, min(100, int(w.background_opacity)))}%", "            widgets:"]
+            if w.trend_show_y_axis:
+                for tick in range(max(2, min(int(w.trend_y_ticks or 5), 10))):
+                    y = round(chart_top + chart_h * tick / max(1, int(w.trend_y_ticks or 5) - 1))
+                    result += ["              - line:", f"                  id: {w.id}_y_grid_{tick}", "                  points:", f"                    - {chart_x}, {y}", f"                    - {chart_x + chart_w}, {y}", f"                  line_color: {color(w.trend_axis_color)}", "                  line_width: 1"]
+                    value = float(w.progress_max) - (float(w.progress_max) - float(w.progress_min)) * tick / max(1, int(w.trend_y_ticks or 5) - 1)
+                    decimals = max(0, min(3, int(w.value_decimals or 0)))
+                    value_text = f"{value:.{decimals}f}"
+                    result += ["              - label:", f"                  id: {w.id}_y_label_{tick}", "                  x: 0", f"                  y: {y - 7}", f"                  text: {q(value_text)}", f"                  text_color: {color(w.trend_axis_color)}", f"                  text_font: ui_font_{min(w.font_size, 16)}"]
+            if w.trend_show_x_axis:
+                result += ["              - line:", f"                  id: {w.id}_x_axis", "                  points:", f"                    - {chart_x}, {chart_top + chart_h}", f"                    - {chart_x + chart_w}, {chart_top + chart_h}", f"                  line_color: {color(w.trend_axis_color)}", "                  line_width: 1"]
+                ticks = max(2, min(int(w.trend_x_ticks or 5), 10))
+                for tick in range(ticks):
+                    x = round(chart_x + chart_w * tick / max(1, ticks - 1))
+                    minutes = int(w.trend_time_range_minutes or 120) * (ticks - 1 - tick) / max(1, ticks - 1)
+                    label = f"-{round(minutes)}m" if minutes < 180 else f"-{round(minutes / 60)}h"
+                    result += ["              - label:", f"                  id: {w.id}_x_label_{tick}", f"                  x: {x - 12}", f"                  y: {chart_top + chart_h + 3}", f"                  text: {q(label)}", f"                  text_color: {color(w.trend_axis_color)}", f"                  text_font: ui_font_{min(w.font_size, 16)}"]
             result += ["              - line:", f"                  id: {w.id}_trend", "                  points:", *points,
                        f"                  line_color: {color(w.progress_color)}", "                  line_width: 3"]
             result += self._label_lines(w)
