@@ -653,7 +653,15 @@ class StudioHandler(BaseHTTPRequestHandler):
     def do_POST(self) -> None:
         try:
             payload = self._body()
-            if self.path == "/api/project":
+            if self.path == "/api/exit":
+                origin = self.headers.get("Origin")
+                if origin and origin != f"http://{self.headers.get('Host')}":
+                    raise ValueError("退出请求必须来自工作台页面")
+                if payload.get("exit") is not True:
+                    raise ValueError("缺少退出指令")
+                self._json({"ok": True})
+                self.server.request_exit()
+            elif self.path == "/api/project":
                 self.server.state.set_project(payload)
                 self._json({"ok": True})
             elif self.path == "/api/project/import":
@@ -785,9 +793,18 @@ class StudioHandler(BaseHTTPRequestHandler):
 
 
 class StudioServer(ThreadingHTTPServer):
+    daemon_threads = True
+
     def __init__(self, address: tuple[str, int], state: StudioState) -> None:
         super().__init__(address, StudioHandler)
         self.state = state
+        self.exit_requested = threading.Event()
+
+    def request_exit(self) -> None:
+        if self.exit_requested.is_set():
+            return
+        self.exit_requested.set()
+        threading.Thread(target=self.shutdown, daemon=True).start()
 
 
 def _start_tray(server: StudioServer, url: str):
@@ -808,8 +825,7 @@ def _start_tray(server: StudioServer, url: str):
         webbrowser.open(url)
 
     def exit_studio(icon, _item=None) -> None:
-        icon.stop()
-        server.shutdown()
+        server.request_exit()
 
     tray = pystray.Icon(
         "mihome-display-studio",
@@ -826,14 +842,15 @@ def _start_tray(server: StudioServer, url: str):
 
 def run_server(root: Path, port: int = 8765, open_browser: bool = True) -> None:
     state = StudioState(root)
-    for candidate in range(port, port + 20):
-        try:
-            server = StudioServer(("127.0.0.1", candidate), state)
-            break
-        except OSError:
-            continue
-    else:
-        raise RuntimeError("找不到可用的本地端口")
+    try:
+        server = StudioServer(("127.0.0.1", port), state)
+    except OSError as exc:
+        if exc.errno not in {48, 98, 10048} and getattr(exc, "winerror", None) != 10048:
+            raise
+        if open_browser:
+            webbrowser.open(f"http://127.0.0.1:{port}")
+        print(f"端口 {port} 已有服务，未启动重复工作台")
+        return
     url = f"http://127.0.0.1:{server.server_port}"
     print(f"米家中枢屏幕工作台：{url}")
     tray = _start_tray(server, url)
@@ -844,6 +861,20 @@ def run_server(root: Path, port: int = 8765, open_browser: bool = True) -> None:
     except KeyboardInterrupt:
         pass
     finally:
+        # A detached watchdog reaps this instance and all its build children,
+        # even if a monitor or tray shutdown blocks. Never kill all Pythons.
+        if sys.platform == "win32":
+            subprocess.Popen(
+                ["powershell.exe", "-NoProfile", "-NonInteractive", "-Command",
+                 f"Start-Sleep -Seconds 3; taskkill /PID {os.getpid()} /T /F"],
+                creationflags=subprocess.CREATE_NO_WINDOW | subprocess.DETACHED_PROCESS,
+                stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            )
+        server.state.serial_monitor.stop()
+        server.state.network_monitor.stop()
         if tray is not None:
             tray.stop()
         server.server_close()
+        if sys.platform == "win32":
+            # Keep the parent alive until its tree has been terminated.
+            threading.Event().wait(6)

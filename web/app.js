@@ -1730,6 +1730,26 @@ async function uploadImage(file) {
 function markDirty() { state.dirty = true; storeRecoveryDraft(); $("#saveState").textContent = "未保存"; }
 
 let saveTimer;
+document.getElementById("exitStudioBtn").addEventListener("click", async () => {
+  if (!window.confirm("保存并退出工作台？正在进行的编译、烧录和监视任务会被停止。")) return;
+  const button = document.getElementById("exitStudioBtn");
+  button.disabled = true;
+  try {
+    clearTimeout(saveTimer);
+    await request("/api/project", { method: "POST", body: JSON.stringify(state.project) });
+    await request("/api/exit", { method: "POST", body: JSON.stringify({ exit: true }) });
+    state.dirty = false;
+    clearRecoveryDraft();
+    document.body.replaceChildren();
+    const message = document.createElement("p");
+    message.textContent = "工作台正在退出，后台任务将一并停止。可以关闭此页面。";
+    document.body.append(message);
+  } catch (error) {
+    button.disabled = false;
+    toast(error.message);
+  }
+});
+
 function saveProject() {
   clearTimeout(saveTimer);
   saveTimer = setTimeout(async () => {
